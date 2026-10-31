@@ -7,16 +7,19 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.2.0.** On top of the v0.1 skeleton (layout, configuration
-> system, plugin registration, profile rendering, install/uninstall
-> cycle, unit-tested pure logic), v0.2 adds the authorization layer
-> adapted from DeepSeek's own prototype: a deterministic **Gate** in
-> front of the Router's judgement, immutable **Mandates** on accepted
-> tasks, `observe`/`auto` accept modes, a structured worker **Report**
-> taxonomy with a derived stage table, and an agent-guided
-> [SETUP.md](SETUP.md). End-to-end dispatch on a live Hermes install is
-> the next milestone. Design choices that depend on the exact Hermes
-> version are listed in [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md).
+> **Status: v0.2.2.** The dispatch chain is verified end-to-end on a
+> live Hermes install (restricted Router → board → dispatcher →
+> Worker → native completion). On top of the v0.1 skeleton (layout,
+> configuration system, plugin registration, profile rendering,
+> install/uninstall cycle, unit-tested pure logic), v0.2 adds the
+> authorization layer adapted from DeepSeek's own prototype: a
+> deterministic **Gate** in front of the Router's judgement, immutable
+> **Mandates** on accepted tasks, `observe`/`auto` accept modes,
+> board-derived task stages, and an agent-guided [SETUP.md](SETUP.md).
+> Field lessons from the first live install are recorded in
+> [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) item 9; the product
+> direction — Hermes-native, last-mile first, no pure-geek tooling —
+> is binding and written down in [docs/PRINCIPLES.md](docs/PRINCIPLES.md).
 
 ## Why
 
