@@ -289,6 +289,92 @@ def sync_journal():
 
 
 # --------------------------------------------------------------------------
+# Doctor (whole-install health check, in prose)
+# --------------------------------------------------------------------------
+
+def _doctor_findings():
+    import socket
+
+    from . import doctor as doc
+
+    cfg = load_suite_config()
+    router = cfg.get("router") or {}
+    workers = cfg.get("workers") or []
+    findings = []
+    findings += doc.check_config_loaded(cfg, router.get("profile"), len(workers))
+
+    names = [router.get("profile")] + [w.get("profile") for w in workers]
+    profile_cfgs, profile_texts, allow_private = {}, {}, {}
+    for name in names:
+        if not name:
+            continue
+        path = os.path.join(hermes_home(), "profiles", name, "config.yaml")
+        text = None
+        try:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError:
+            pass
+        profile_texts[name] = text
+        parsed = {}
+        if text:
+            try:
+                import yaml
+
+                parsed = yaml.safe_load(text) or {}
+            except Exception:
+                parsed = {}
+        profile_cfgs[name] = parsed
+        allow_private[name] = bool(
+            ((parsed.get("security") or {}).get("allow_private_urls"))
+        )
+    if router.get("profile"):
+        findings += doc.check_router_toolsets(
+            router["profile"], profile_cfgs.get(router["profile"])
+        )
+    for w in workers:
+        if w.get("profile"):
+            findings += doc.check_worker_profile(
+                w["profile"], profile_cfgs.get(w["profile"])
+            )
+    findings += doc.check_smart_quotes(profile_texts)
+
+    present_names = set(os.environ)
+    env_files = [os.path.join(hermes_home(), ".env")] + [
+        os.path.join(hermes_home(), "profiles", n, ".env") for n in names if n
+    ]
+    for path in env_files:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        present_names.add(line.split("=", 1)[0].strip())
+        except OSError:
+            pass
+    providers = cfg.get("providers") or {}
+    env_present = {}
+    for p in providers.values():
+        var = (p or {}).get("api_key_env")
+        if var:
+            env_present[var] = var in present_names
+    findings += doc.check_key_env(providers, env_present)
+    findings += doc.check_private_base_url(providers)
+
+    resolved = []
+    try:
+        infos = socket.getaddrinfo(
+            "api-docs.deepseek.com", 443, proto=socket.IPPROTO_TCP
+        )
+        resolved = sorted({info[4][0] for info in infos})
+    except Exception:
+        resolved = []
+    findings += doc.check_fake_ip(resolved, allow_private)
+    findings += doc.check_board(board_counts())
+    return findings
+
+
+# --------------------------------------------------------------------------
 # Activity log (hooks)
 # --------------------------------------------------------------------------
 
@@ -403,10 +489,23 @@ def _cli_setup(parser):
     sub.add_parser("status", help="Show superagent status")
     sub.add_parser("watchdog", help="Report stalled tasks (report-only)")
     sub.add_parser("digest", help="Sync the journal and print recent outcomes")
+    sub.add_parser("doctor", help="Health-check the whole install, in plain language")
 
 
 def _cli_handler(args):
     sub = getattr(args, "subcommand", None) or "status"
+    if sub == "doctor":
+        from .doctor import summarize
+
+        findings = _doctor_findings()
+        marks = {"ok": "✓", "warn": "⚠", "error": "✗"}
+        print("superagent 体检：")
+        for f in findings:
+            print(f"{marks.get(f['level'], '?')} {f['text']}")
+            if f.get("fix"):
+                print(f"  修法：{f['fix']}")
+        print(summarize(findings))
+        return 1 if any(f["level"] == "error" for f in findings) else 0
     if sub == "digest":
         from .journal import render_digest
 
