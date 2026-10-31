@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.2.1"
+PLUGIN_VERSION = "0.2.2"
 
 
 # --------------------------------------------------------------------------
@@ -168,6 +168,56 @@ def board_reports():
     return latest
 
 
+def board_events():
+    """Native board events per task: {task_id: [{type, ts}, ...]}.
+
+    Reads the board's event table (Hermes writes one row per lifecycle
+    transition: created / claimed / completed / blocked / …). Same
+    defensive posture as board_reports(): the storage layout is a
+    Hermes implementation detail, so any mismatch quietly yields {}.
+    Events are returned in write order (oldest first).
+    """
+    conn = _board_connect()
+    if conn is None:
+        return {}
+    try:
+        tables = [
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        ]
+        table = next((t for t in tables if "event" in t.lower()), None)
+        if table is None:
+            return {}
+        cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+        task_col = next((c for c in cols if "task" in c.lower()), None)
+        type_col = next(
+            (c for c in cols if c.lower() in ("type", "event", "kind", "name")),
+            None,
+        )
+        ts_col = next(
+            (c for c in cols if "creat" in c.lower() or c.lower() in ("ts", "time", "at")),
+            None,
+        )
+        if task_col is None or type_col is None:
+            return {}
+        ts_expr = ts_col if ts_col else "NULL"
+        rows = conn.execute(
+            f"SELECT {task_col}, {type_col}, {ts_expr} FROM {table} ORDER BY rowid"
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    events = {}
+    for task_id, etype, ts in rows:
+        events.setdefault(task_id, []).append(
+            {"type": etype, "ts": _epoch(ts)}
+        )
+    return events
+
+
 # --------------------------------------------------------------------------
 # Activity log (hooks)
 # --------------------------------------------------------------------------
@@ -272,18 +322,24 @@ def _cli_setup(parser):
 def _cli_handler(args):
     sub = getattr(args, "subcommand", None) or "status"
     if sub == "watchdog":
-        from .reports import stage_for
+        from .reports import derive_report, stage_for
         from .watchdog_logic import find_stalled
 
         cfg = load_suite_config()
         wd = cfg.get("watchdog") or {}
         tasks = board_tasks()
         reports = board_reports()
+        events = board_events()
         for t in tasks:
             if t.get("status") in ("done", "archived"):
                 continue
+            kind = derive_report(
+                t.get("status"),
+                events.get(t.get("id")),
+                reports.get(t.get("id")),
+            )
             stage = stage_for(
-                latest_report=reports.get(t.get("id")),
+                latest_report=kind,
                 has_assignment=bool(t.get("assignee"))
                 or t.get("status") in ("running", "in_progress"),
             )

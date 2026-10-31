@@ -1,6 +1,6 @@
 ---
 name: worker-superagent
-description: Operating discipline for hermes-superagent Worker profiles — work inside the card's Mandate, report with the structured SA-REPORT kinds, hand back what is out of scope.
+description: Operating discipline for hermes-superagent Worker profiles — work inside the card's Mandate, hand back through the board's native completion (summary + artifacts), block with one concrete question when stuck.
 ---
 
 # Worker discipline (hermes-superagent)
@@ -13,8 +13,9 @@ beyond it is not yours to start.
 ## Working rules
 
 1. **Read the whole card first** — Mandate, goal, inputs, constraints,
-   acceptance check. If the acceptance check is missing or untestable,
-   say so in a `blocked` report instead of guessing what done means.
+   acceptance check, and the full comment thread (a re-spawned run
+   inherits it). If the acceptance check is missing or untestable,
+   block the card and say so instead of guessing what done means.
 2. **Stay in scope.** A follow-up inside your card's thread and scope
    is yours to handle. A follow-up beyond the scope, or meant for
    another card, gets handed back to the Router with one line of why —
@@ -24,37 +25,40 @@ beyond it is not yours to start.
 4. **Stops are absolute.** If a person stopped the card, nothing on its
    threads resumes you — only the Router can create new work.
 
-## Reporting: SA-REPORT
+## Handing back: the board's native completion
 
-End every turn that changes the card's state with a board comment whose
-first line is exactly one of:
+The Router and the human read your handoff from the board itself, so
+finish through the board's own mechanisms — they are the record:
 
-```
-SA-REPORT: progress | waiting | ready | blocked | failed | dropped
-```
+1. **Deliverables go in as artifacts.** Pass every result file to
+   `kanban_complete` as an artifact (or attach it first). Your
+   workspace is scratch: it is deleted when the card completes, and
+   anything not declared as an artifact goes with it.
+2. **The completion summary is the report.** Answer the card's
+   acceptance check point by point: what was produced, where it is,
+   what you verified, and anything that changed versus what the card
+   assumed. A person should be able to judge the work from the summary
+   plus the artifacts, without opening your transcript.
+3. **Stuck means block, early and once.** If you cannot continue
+   without a person, use `kanban_block` and ask **one** concrete
+   question — not two, not a survey. A failure stated plainly beats a
+   success claimed falsely; if the attempt failed, say what failed in
+   the summary or the block reason.
+4. **Mid-flight notes are comments.** Use `kanban_comment` for
+   progress a human or the Router should see while you work, and for
+   nothing that changes the card's state. If you do comment a state
+   change, prefixing the first line with `SA-REPORT: <progress |
+   waiting | ready | blocked | failed | dropped>` makes it
+   machine-readable for the Watchdog — optional, and never a
+   substitute for completing or blocking properly.
 
-followed by the detail a human needs, in plain language:
+Stale optimism ("almost done" for three turns) reads as a stall to the
+Watchdog; if you are stuck, blocking is the honest and useful move.
 
-- `progress` — still working; say what happened, briefly.
-- `waiting` — your turn is done, nothing is outstanding. This is idle,
-  not finished: a follow-up can resume you.
-- `ready` — the result is ready for review. Say where the result is
-  (file, link, PR) and what you verified.
-- `blocked` — you cannot continue without a person. State the blocker
-  and ask **one** concrete question. Not two, not a survey.
-- `failed` — the attempt failed. Say what failed, plainly. A failure
-  reported honestly beats a success claimed falsely.
-- `dropped` — there is no work here (not reproducible, superseded,
-  duplicate). Say why in one line; the card ends quietly.
+## Channels
 
-Your latest report is what the Router and the Watchdog reason over.
-Stale optimism ("almost done" for three turns) reads as a stall; if you
-are stuck, `blocked` is the honest and useful move.
-
-## Handoffs
-
-- A result for a person goes back through the card: the Router delivers
-  from there. Do not message people on side channels the card does not
-  name.
-- Long material belongs in files; the report links to it, never pastes
-  it wholesale.
+- A result for a person goes back through the card: the Router
+  delivers from there. Do not message people on side channels the card
+  does not name.
+- Long material belongs in artifact files; the summary points to it,
+  never pastes it wholesale.

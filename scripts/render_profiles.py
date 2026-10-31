@@ -71,6 +71,24 @@ def worker_toolsets(role_toolsets):
     return out
 
 
+def security_block(cfg):
+    """Hermes `security:` section for a profile config, or "".
+
+    Only rendered when the user opted in (security.allow_private_urls:
+    true). Profiles do NOT inherit the default profile's security
+    settings — field-verified 2026-11-01: a global
+    `hermes config set security.allow_private_urls true` left every
+    worker profile still blocked by the SSRF guard — so the suite
+    writes the setting into each profile it manages. When the option
+    is off the section is omitted entirely, preserving any per-profile
+    choice the user made by hand.
+    """
+    security = cfg.get("security") or {}
+    if security.get("allow_private_urls") is True:
+        return "security:\n  allow_private_urls: true"
+    return ""
+
+
 def render_all(cfg, templates_dir, out_dir):
     """Render every profile. Returns the list of profile dirs written."""
     providers = cfg.get("providers") or {}
@@ -98,6 +116,7 @@ def render_all(cfg, templates_dir, out_dir):
                 "TOOLSETS": toolsets_yaml(
                     worker_toolsets(role.get("toolsets")) if is_worker else role.get("toolsets")
                 ),
+                "SECURITY_BLOCK": security_block(cfg),
             }
         )
         dest_dir = os.path.join(out_dir, profile)

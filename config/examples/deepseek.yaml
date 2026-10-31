@@ -72,3 +72,8 @@ limits:
   max_workers: 4
   reserved_human_slot: true
   router_reply_max_words: 100
+
+security:
+  # See config/superagent.yaml for the full explanation. On unless
+  # this machine needs private/CGNAT destinations (e.g. fake-IP DNS).
+  allow_private_urls: false

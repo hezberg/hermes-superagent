@@ -69,6 +69,48 @@ class TestRenderDeepseekExample(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(warnings, [])
 
+    def test_security_section_omitted_by_default(self):
+        # deepseek.yaml sets allow_private_urls: false -> nothing rendered,
+        # so a per-profile choice made by hand is never overwritten.
+        for profile in ("sa-router", "sa-worker-research"):
+            self.assertNotIn("allow_private_urls", self.read(profile))
+
+
+class TestRenderSecurityOptIn(unittest.TestCase):
+    def test_allow_private_urls_rendered_into_every_profile(self):
+        cfg = {
+            "version": 1,
+            "providers": {
+                "main": {"type": "openai-compatible",
+                         "base_url": "http://100.64.0.1:3001/v1",
+                         "api_key_env": "MAIN_KEY"}
+            },
+            "router": {"profile": "sa-router", "provider": "main", "model": "m"},
+            "workers": [
+                {"name": "research", "profile": "sa-worker-research",
+                 "provider": "main", "model": "m", "toolsets": ["web", "file"]},
+            ],
+            "security": {"allow_private_urls": True},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            render.render_all(cfg, os.path.join(ROOT, "profiles"), tmp)
+            for profile in ("sa-router", "sa-worker-research"):
+                with open(os.path.join(tmp, profile, "config.yaml"),
+                          encoding="utf-8") as fh:
+                    text = fh.read()
+                self.assertIn("security:\n  allow_private_urls: true", text)
+                self.assertNotIn("{{", text)
+
+    def test_security_must_be_bool(self):
+        errors, _ = validate_mod.validate(
+            {"version": 1,
+             "providers": {"m": {"type": "anthropic", "api_key_env": "K"}},
+             "router": {"profile": "r", "provider": "m", "model": "x"},
+             "workers": [{"profile": "w", "provider": "m", "model": "x"}],
+             "security": {"allow_private_urls": "yes"}}
+        )
+        self.assertTrue(any("allow_private_urls" in e for e in errors))
+
 
 class TestRenderAnthropic(unittest.TestCase):
     def test_anthropic_provider_maps_through(self):

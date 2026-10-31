@@ -49,14 +49,33 @@ place when the suite meets a real installation:
    numbers or ISO-8601 strings. If the board schema differs, adapt
    `board_tasks()` in the plugin; the detection logic itself is
    schema-free and unit-tested.
-7. **Report comments** — the stage derivation reads worker reports from
-   a comment-like table on the board (any table whose name contains
-   "comment", with task and body columns) and parses the `SA-REPORT:`
-   first line. If your Hermes version stores comments elsewhere, adapt
-   `board_reports()`; stages silently fall back to status-only when no
-   reports are found.
+7. **Report derivation** — task stages are derived first from native
+   board records: `board_events()` reads the board's event table (any
+   table whose name contains "event", with task and type columns) and
+   `derive_report()` maps run-concluding events (completed → ready,
+   blocked → blocked, gave_up/crashed/timed_out → failed) and falls
+   back to the task's status. `board_reports()` additionally scans a
+   comment-like table for the optional `SA-REPORT:` upgrade. If your
+   Hermes version stores events/comments elsewhere, adapt those two
+   readers; derivation silently degrades to status-only.
 8. **Gate enforcement point** — the Gate (`gate.py`) is pure logic. In
    v0.2 it is enforced by the Router skill (the Router runs the Gate
    before judging) and by the status surface; hard enforcement inside
    the gateway's message path is phase-2 work, once the live install
    shows where Hermes lets a plugin intercept inbound events.
+9. **Field findings from the first live install (2026-11-01)** — three
+   assumptions died on contact with a real machine and shaped v0.2.2:
+   (a) *Skill loading is at the model's discretion.* A
+   dispatcher-spawned worker completed its card through the native
+   handoff (summary + artifacts) without ever loading the worker
+   skill, so nothing in the suite may *depend* on a skill being read:
+   reporting derives from native board records (item 7), and the
+   worker skill only teaches the native discipline. (b) *Profiles do
+   not inherit the default profile's config.* A global
+   `security.allow_private_urls: true` left worker profiles still
+   SSRF-blocked; settings the suite cares about are rendered into
+   every profile (see CONFIG.md, security). (c) *Clash/mihomo fake-IP
+   DNS makes every public hostname resolve into 198.18.0.0/15*, which
+   Hermes' SSRF guard treats as internal — on such machines
+   `allow_private_urls` is the difference between web tools working
+   and not working at all.

@@ -125,3 +125,16 @@ limits:
   # IM-style channels stay low-noise: the Router's chat replies should be
   # short; detail goes into files / board comments. (words, approx.)
   router_reply_max_words: 100
+
+security:
+  # Hermes' SSRF guard blocks its web/browser fetches to private,
+  # loopback, link-local and CGNAT addresses. Leave this OFF unless
+  # this machine legitimately needs those destinations — the classic
+  # case is a Clash/mihomo fake-IP DNS setup, where every public name
+  # resolves into 198.18.0.0/15 and *all* web fetches get blocked;
+  # LAN/tailnet-hosted endpoints are the other. When true, the setting
+  # is rendered into EVERY profile (profiles do not inherit the
+  # default profile's security settings). This is a deliberate trust
+  # boundary in Hermes' own docs: enabling it lets agents fetch
+  # arbitrary LAN addresses.
+  allow_private_urls: false

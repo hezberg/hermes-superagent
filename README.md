@@ -81,9 +81,11 @@ Uninstall (removes exactly what the install manifest recorded):
   request; every accepted task records an immutable Mandate (policy
   version, scope, strength). Proactive work starts in `observe` mode:
   recorded, never executed, until the operator switches to `auto`.
-- **Workers report in an enum, not prose** (`SA-REPORT: ready|blocked|…`),
-  and task stages are derived from those reports — so the Watchdog
-  reasons over facts, with timestamp stall detection as a fallback.
+- **Worker state is derived from the board's own records** — the
+  native completion summary, block events and heartbeats — with an
+  optional structured enum (`SA-REPORT: ready|blocked|…`) as an
+  upgrade when a worker provides one. The Watchdog reasons over facts
+  either way; timestamp stall detection is the fallback.
 - **Watchdog defaults to report-only.** It surfaces stalled tasks; acting
   on them (nudge / requeue) is an explicit opt-in in the config.
 - **Installs are reversible.** Everything the installer creates is listed

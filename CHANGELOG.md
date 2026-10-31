@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.2 — 2026-11-01
+
+Lessons from the first live install's completed card, applied:
+
+- **Reporting no longer depends on the worker skill being loaded.**
+  The field worker completed its card through Hermes' native handoff
+  (kanban_complete summary + artifacts) without ever loading the
+  worker skill, so the mandated `SA-REPORT:` comment never appeared.
+  The plugin now derives each task's report kind from the board's
+  native records first — `derive_report()` in reports.py maps
+  run-concluding events (completed → ready, blocked → blocked,
+  gave_up/crashed/timed_out → failed) and the task status; a new
+  defensive `board_events()` reader feeds it. An explicit SA-REPORT
+  comment still wins when present, as an optional upgrade. The worker
+  skill is rewritten around the native discipline instead: artifacts
+  carry deliverables (scratch workspaces are deleted at completion),
+  the completion summary answers the acceptance check point by point,
+  `kanban_block` with one concrete question when stuck.
+- **`security.allow_private_urls` is now a suite option.** Profiles
+  do not inherit the default profile's security settings (verified in
+  the field: a global `config set` left workers SSRF-blocked), so
+  when the option is true the renderer writes the `security:` section
+  into every profile. Default false; the config comments spell out
+  the trust boundary and the fake-IP DNS case that needs it.
+- ASSUMPTIONS gains item 9, recording the three field findings
+  (discretionary skill loading, no cross-profile config inheritance,
+  fake-IP DNS vs the SSRF guard) so they are not relearned.
+
 ## 0.2.1 — 2026-11-01
 
 Field fix from the first live install: the Router had no kanban tools

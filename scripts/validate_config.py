@@ -116,6 +116,15 @@ def validate(cfg):
             if effort is not None and not isinstance(effort, str):
                 err(f"{label}.reasoning_effort must be a string (or empty)")
 
+    security = cfg.get("security")
+    if security is not None:
+        if not isinstance(security, dict):
+            err("security: must be a mapping")
+        elif "allow_private_urls" in security and not isinstance(
+            security["allow_private_urls"], bool
+        ):
+            err("security.allow_private_urls must be true or false")
+
     events = cfg.get("events") or {}
     for i, rule in enumerate(events.get("fastpath") or []):
         if not isinstance(rule, dict) or not rule.get("pattern"):

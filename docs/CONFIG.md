@@ -96,3 +96,9 @@ surface differs across versions; see ASSUMPTIONS.md.)
 | `max_workers` | Cap on simultaneously running worker profiles |
 | `reserved_human_slot` | bool, default true — always keep one slot free for a human's follow-up, so new work cannot starve an existing task's owner |
 | `router_reply_max_words` | Soft budget for the Router's chat replies (detail belongs in files) |
+
+## security
+
+| Field | Meaning |
+|---|---|
+| `allow_private_urls` | bool, default false. Hermes' SSRF guard blocks web/browser fetches to private, loopback, link-local and CGNAT addresses. Turn on only when this machine legitimately needs those destinations (classic case: Clash/mihomo fake-IP DNS, where public names resolve into 198.18.0.0/15 and every fetch is blocked; or LAN/tailnet-hosted endpoints). When true it is rendered into **every** profile — profiles do not inherit the default profile's security settings, so a global `hermes config set` does not reach workers. Hermes' docs call this a deliberate trust boundary: enabling it lets agents fetch arbitrary LAN addresses. When false the section is omitted from rendered profiles, preserving any per-profile choice made by hand. |
