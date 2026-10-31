@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.3.0 — 2026-11-01
+
+The last-mile release. Operator direction (docs/PRINCIPLES.md): stop
+adding mechanism, start finishing the distance between "works in a
+terminal" and "feels like a good assistant". Four chunks, each traced
+to a specific rough edge of the first live install:
+
+- **Finished work becomes global memory.** Every terminal card is
+  recorded in `~/.hermes/superagent/journal.jsonl` (+ `journal.md`
+  for humans): title, assignee, outcome, the native completion
+  summary and artifact paths. New `hermes superagent digest` prints
+  recent outcomes in prose; `sa_status` carries the last few; the
+  Router skill now opens fresh conversations with a one-line
+  continuity glance at the journal. (The borrowed design has no such
+  layer — its ticket outcomes never become shared memory.)
+- **`hermes superagent doctor`.** The whole install checked in plain
+  sentences, each finding with its fix attached: key env vars, legacy
+  or missing toolset selection, router carrying execution tools,
+  fake-IP DNS vs the SSRF guard per profile, curly quotes in rendered
+  configs, private model endpoints, board state. Every check is a
+  failure the first install actually hit; nobody should need a log
+  tail again. The installer also self-checks plugin loading after
+  install and explains, in prose, what works without it.
+- **The user's config can no longer be eaten by an upgrade.** Once a
+  filled-in copy exists under `~/.hermes/superagent/`, the installer
+  prefers it over a pristine repo template (scripts/pick_config.py)
+  and says so; the closing text names the effective config and where
+  future edits belong.
+- **The chat entry is prepared.** The Router renders its restricted
+  toolset selection for the Feishu platform too; the Router skill
+  defines the completion wake-up protocol (verify the handoff, report
+  in brief prose, relay a block as one question with a recommended
+  answer, never forward board dumps); SETUP.md §6 documents the host
+  wiring, with gateway-chat routing flagged as the one
+  version-dependent step (ASSUMPTIONS item 10).
+
+91 tests passing; every chunk sandbox-verified, including an upgrade
+run that recovered the operator's filled config from the suite path
+and a doctor run against a deliberately field-broken install.
+
 ## 0.2.2 — 2026-11-01
 
 Lessons from the first live install's completed card, applied:

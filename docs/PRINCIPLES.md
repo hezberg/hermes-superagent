@@ -34,13 +34,13 @@ with one of them, the principle wins and the feature gets re-thought.
    user is waiting for, it says so. Polling is the system's job, not
    the user's.
 
-## Last-mile backlog (honest status at v0.2.2)
+## Last-mile backlog (honest status at v0.3.0)
 
 | Item | Status |
 |---|---|
-| Chat-native entry (Feishu) so tasks start in conversation | Not yet — CLI only |
-| Completion wakes the Router, which reports back in that chat (kanban subscription) | Not yet — impossible from a bare CLI session by design; arrives with the chat entry |
-| Completion → global memory: terminal cards' summaries land in a suite journal / Router memory, recallable in later conversations | Not yet |
-| User config lives outside the repo tree (source of truth under `~/.hermes/superagent/`), so upgrades cannot clobber it | Not yet — happened once in the field, 2026-11-01 |
-| Guided setup as the default path; install errors in prose | Partial — SETUP.md exists |
+| Chat-native entry (Feishu) so tasks start in conversation | Prepared on the suite side — Router renders the feishu toolset selection, SETUP.md §6 documents the wiring; host-side routing still to do on the target install |
+| Completion wakes the Router, which reports back in that chat (kanban subscription) | Protocol defined in the Router skill; lights up with the chat entry |
+| Completion → global memory: terminal cards' summaries land in a suite journal / Router memory, recallable in later conversations | **Done** — `journal.jsonl`/`journal.md`, `hermes superagent digest`, `sa_status` recent outcomes, Router continuity glance |
+| User config lives outside the repo tree (source of truth under `~/.hermes/superagent/`), so upgrades cannot clobber it | **Done** — installer prefers the filled suite copy over a pristine repo template and says so |
+| Guided setup as the default path; install errors in prose | Largely done — `hermes superagent doctor` checks the whole install in prose with fixes; installer self-checks plugin loading and explains in plain language |
 | Dashboard-first status surfaces | Partial — Hermes' dashboard works; the suite does not point at it yet |
