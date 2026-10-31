@@ -1,0 +1,83 @@
+# hermes-superagent — main configuration
+# ---------------------------------------------------------------------------
+# This is the ONLY file you need to edit. The installer renders Hermes
+# profile configs from it. API keys are NEVER stored here: each provider
+# names an environment variable (api_key_env); put the actual key in the
+# profile's .env file or your shell environment on the target machine.
+#
+# Provider types wired up out of the box:
+#   openai-compatible — any endpoint speaking the OpenAI API shape
+#                       (OpenAI, DeepSeek, OpenRouter, vLLM, Ollama, ...)
+#   anthropic         — any endpoint speaking the Anthropic API shape
+#                       (Anthropic, or a compatible gateway)
+# Which model each role uses is entirely your choice: fill in `model`.
+
+version: 1
+
+providers:
+  main:
+    type: openai-compatible
+    base_url: "" # e.g. https://api.deepseek.com  |  https://api.openai.com/v1
+    api_key_env: SUPERAGENT_MAIN_API_KEY
+  # alt:
+  #   type: anthropic
+  #   base_url: ""        # e.g. https://api.anthropic.com
+  #   api_key_env: SUPERAGENT_ALT_API_KEY
+
+# The Router is a dedicated Hermes profile. It receives tasks, decomposes
+# them onto the Kanban board and reports back. It is intentionally given
+# NO execution toolsets (see profiles/router) so it cannot do the work
+# itself — dispatching is its only job.
+router:
+  profile: sa-router
+  provider: main
+  model: "" # a fast, cheap model fits: routing is a judgement call, not a marathon
+
+workers:
+  - name: general
+    profile: sa-worker-general
+    role: general # everyday tasks: shell, files, web
+    provider: main
+    model: "" # your strongest general model
+    toolsets: [terminal, file, web, search, kanban]
+    max_concurrent: 2
+  - name: research
+    profile: sa-worker-research
+    role: research # reading, synthesis, long-form reporting
+    provider: main
+    model: ""
+    toolsets: [web, search, file, kanban]
+    max_concurrent: 1
+  - name: deep
+    profile: sa-worker-deep
+    role: deep # hard reasoning: debugging, design, review
+    provider: main
+    model: "" # a reasoning model fits here, if you have one
+    toolsets: [terminal, file, web, search, kanban]
+    max_concurrent: 1
+
+watchdog:
+  enabled: true
+  interval_minutes: 10
+  # report-only | nudge | requeue
+  # report-only: surface stalled tasks to the human, never touch the board.
+  authority: report-only
+  stall_minutes: 30 # running task with no board update for this long = stalled
+  heartbeat_stale_minutes: 15
+
+events:
+  # Speculative execution (start work before being asked, e.g. reproduce a
+  # bug while a group chat is still discussing it) is OFF by default.
+  speculative_execution: false
+  # Fast Path: incoming messages matching a rule skip the Router's LLM
+  # judgement. Actions: passthrough (straight to the owning worker),
+  # drop (ignore), slowpath (normal Router handling — the default).
+  fastpath:
+    - pattern: '^/status\b'
+      action: passthrough
+
+limits:
+  max_workers: 4
+  # IM-style channels stay low-noise: the Router's chat replies should be
+  # short; detail goes into files / board comments. (words, approx.)
+  router_reply_max_words: 100

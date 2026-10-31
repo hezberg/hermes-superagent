@@ -1,0 +1,58 @@
+# Example configuration: DeepSeek for every role.
+# Copy to config/superagent.yaml (or pass --config) and put your key in the
+# SUPERAGENT_MAIN_API_KEY environment variable on the target machine.
+# DeepSeek's API is OpenAI-compatible, so it uses the openai-compatible
+# provider type. Model names below are examples — pick your own.
+
+version: 1
+
+providers:
+  main:
+    type: openai-compatible
+    base_url: https://api.deepseek.com
+    api_key_env: SUPERAGENT_MAIN_API_KEY
+
+router:
+  profile: sa-router
+  provider: main
+  model: deepseek-chat
+
+workers:
+  - name: general
+    profile: sa-worker-general
+    role: general
+    provider: main
+    model: deepseek-chat
+    toolsets: [terminal, file, web, search, kanban]
+    max_concurrent: 2
+  - name: research
+    profile: sa-worker-research
+    role: research
+    provider: main
+    model: deepseek-chat
+    toolsets: [web, search, file, kanban]
+    max_concurrent: 1
+  - name: deep
+    profile: sa-worker-deep
+    role: deep
+    provider: main
+    model: deepseek-reasoner
+    toolsets: [terminal, file, web, search, kanban]
+    max_concurrent: 1
+
+watchdog:
+  enabled: true
+  interval_minutes: 10
+  authority: report-only
+  stall_minutes: 30
+  heartbeat_stale_minutes: 15
+
+events:
+  speculative_execution: false
+  fastpath:
+    - pattern: '^/status\b'
+      action: passthrough
+
+limits:
+  max_workers: 4
+  router_reply_max_words: 100

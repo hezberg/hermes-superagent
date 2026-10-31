@@ -1,0 +1,18 @@
+name: superagent
+version: 0.1.0
+description: >-
+  Super-agent layer for Hermes, after DeepSeek Harness team's design
+  exploration: a dispatch-only Router profile, Kanban-backed Worker
+  profiles, event Fast Path, and a Watchdog. This plugin provides the
+  in-process pieces (commands, status tool, activity hooks); profiles,
+  skills and cron live in the rest of this repository.
+author: hermes-superagent contributors
+provides_tools:
+  - sa_status
+provides_hooks:
+  - on_session_start
+  - on_session_end
+  - post_tool_call
+provides_commands:
+  - tasks
+  - stop
