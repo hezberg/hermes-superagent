@@ -85,9 +85,16 @@ operator step (entering keys). Ask for one confirmation.
    Never receive, print, or store the key yourself.
 3. Install: `./install.sh --config config/superagent.yaml`. A refusal
    names the collision or validation problem; fix that, not around it.
+   After this first install, the effective config's home is
+   `~/.hermes/superagent/superagent.yaml`: the installer prefers that
+   filled-in copy over a pristine repo template on later runs, so
+   upgrades cannot clobber it. Point the operator at that file for
+   future edits.
 4. Verify: start the profile gateways per docs/CONFIG.md, then check
    `hermes superagent status` — config loaded, profiles listed, board
-   present.
+   present — and run `hermes superagent doctor`: it checks the whole
+   install (keys, toolsets, fake-IP DNS, rendered configs) and reports
+   in prose with fixes. Clear every ✗ before handing over.
 
 ## 5. Hand over
 
@@ -101,3 +108,35 @@ One short message:
 - Where to read more: README.md, then docs/CONFIG.md and
   docs/ARCHITECTURE.md.
 - How to undo everything: `./uninstall.sh`.
+
+## 6. Optional: chat entry (Feishu)
+
+The CLI proves the chain; the chat entry is what makes it a product
+(docs/PRINCIPLES.md: tasks should start in the chat the operator
+already lives in, and completion should arrive unasked). Wire it once
+the CLI path works:
+
+1. The default profile's gateway must already be connected to Feishu
+   (check its status first; connecting it is an operator step).
+2. Point board orchestration at the Router:
+   `hermes config set kanban.orchestrator_profile <router profile>`.
+3. The Router's rendered config already enables `kanban` for the
+   `feishu` platform (`platform_toolsets.feishu`), and the installer
+   also tries `hermes -p <router> tools enable kanban --platform
+   feishu`. Confirm with `hermes -p <router> tools list` if available.
+4. Allowlists, both layers: the operator's Feishu identity (open_id)
+   goes into `policy.sources.feishu.allowed_senders` in the suite
+   config, AND the gateway's own sender policy must let that identity
+   through (a fresh gateway denies unknown senders by default — its
+   startup log says so when no allowlists are configured).
+5. Test from Feishu with one small task. Expected: the Router creates
+   a card instead of doing the work; when the card finishes, a message
+   returns to the same conversation and the Router reports the outcome
+   itself (Hermes auto-subscribes chat-created cards by default —
+   `kanban.auto_subscribe_on_create`).
+
+Version-dependent step: how a gateway chat is routed to a non-default
+profile differs across Hermes versions. If the Feishu conversation is
+answered by the default profile instead of the Router, do not improvise
+a workaround — record the exact behaviour and report it; routing is
+pinned per target version in docs/ASSUMPTIONS.md item 10.

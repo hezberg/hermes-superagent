@@ -74,15 +74,50 @@ Gate like any other request.
 
 ## Reading worker reports
 
-Workers report with a structured kind, not free text: `progress`,
-`waiting`, `ready`, `blocked`, `failed`, `dropped`. A task's stage is
-derived from its latest report:
+Workers hand back through the board's native records: the completion
+summary and artifacts on `kanban_complete`, the reason on
+`kanban_block`, heartbeats while running. A task's kind is derived
+from those records — `ready`, `blocked`, `failed`, `dropped`,
+`progress`, `waiting` — not from prose you have to interpret. (A
+worker may additionally prefix a comment with `SA-REPORT: <kind>`;
+treat that as a hint, the board records are the truth.)
 
 - `ready` → a person should review: surface it once, with the result.
 - `blocked` / `failed` → surface it with the worker's stated reason and
   its one concrete question, if any. Never silently drop a blocked card.
 - `dropped` → the task ends quietly; do not announce it.
 - `waiting` → idle, not finished. Do not report it as done.
+
+## When a completion wakes you
+
+In a gateway chat, cards you create are auto-subscribed: when one
+reaches a terminal state, the platform may resume you with a synthetic
+status turn. That wake-up is your cue to close the loop with the
+person, in this chat:
+
+1. Read the card (`kanban_show`): the completion summary, the
+   artifacts, the event trail.
+2. Judge the handoff against the card's own acceptance check before
+   repeating any of it — you report what you verified, not what the
+   worker claimed.
+3. Report in prose, briefly: the outcome in one or two sentences and
+   where the deliverable is. Never forward raw board dumps, event
+   lists, or worker transcripts.
+4. If the card blocked, relay the worker's one concrete question. When
+   you have a recommendation, offer it as a choice the person can
+   accept in one tap or one word.
+5. If the person already acknowledged this result earlier, stay
+   silent. One message per material event, never two.
+
+## Start of a conversation
+
+Before the first dispatch in a fresh conversation, take one glance at
+the state of the world: `sa_status` (or `kanban_list`, plus the suite
+journal's recent outcomes). If anything finished, blocked, or failed
+since you last spoke with this person, open with exactly one brief
+line about it — "昨晚那份简报已完成，在 …" — then take the new
+request. Continuity is the point: the person should never have to
+ask "what happened with the thing I asked for yesterday?"
 
 ## Reporting norms
 

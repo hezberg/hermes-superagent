@@ -152,6 +152,14 @@ if [ "$DRY_RUN" = "1" ]; then
 elif ! hermes -p "$ROUTER_PROFILE" tools enable kanban; then
   say "warning: 'hermes -p $ROUTER_PROFILE tools enable kanban' failed — enable the kanban toolset for that profile manually with: hermes -p $ROUTER_PROFILE tools"
 fi
+# Same, for the Feishu platform, so a chat entry is ready when the user
+# wires one up (see SETUP.md §6). Soft failure: not every install wants
+# a chat entry, and the platform name is version-dependent.
+if [ "$DRY_RUN" = "1" ]; then
+  say "[dry-run] hermes -p $ROUTER_PROFILE tools enable kanban --platform feishu"
+elif ! hermes -p "$ROUTER_PROFILE" tools enable kanban --platform feishu 2>/dev/null; then
+  say "note: 没能给 $ROUTER_PROFILE 预开飞书平台的 kanban 工具集（渲染配置里已经写了同一行，通常不影响）。若要用飞书入口，按 SETUP.md 第 6 节手动开一次即可。"
+fi
 
 # ------------------------------------------------------------------ manifest
 say "== writing manifest"

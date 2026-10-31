@@ -79,3 +79,17 @@ place when the suite meets a real installation:
    Hermes' SSRF guard treats as internal — on such machines
    `allow_private_urls` is the difference between web tools working
    and not working at all.
+10. **Chat-entry routing (unpinned).** The suite prepares everything
+    on its side for a Feishu entry — the Router's rendered config
+    carries `platform_toolsets.feishu: [kanban, memory, skills]`, the
+    Router skill defines the completion wake-up protocol, SETUP.md §6
+    lists the host steps. Two facts remain version-dependent and must
+    be pinned on the target install: the exact platform key spelling
+    (`feishu`) in toolset selection, and how a gateway chat is routed
+    to a non-default profile (orchestrator_profile vs profile
+    routes). Hermes' own docs establish the subscription half:
+    cards created inside a gateway chat auto-subscribe their origin
+    chat, and terminal events wake the creating agent
+    (`kanban.auto_subscribe_on_create`, default on) — a bare CLI
+    session has no deliverable destination, which is why completion
+    notifications require the chat entry.

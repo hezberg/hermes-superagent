@@ -54,6 +54,9 @@ class TestRenderDeepseekExample(unittest.TestCase):
         # platform_toolsets (agent.toolsets is not read by Hermes).
         self.assertIn("platform_toolsets", text)
         self.assertIn("cli: [kanban, memory, skills]", text)
+        # Same selection pre-rendered for the Feishu platform, so a
+        # chat entry is ready when the operator wires one up.
+        self.assertIn("feishu: [kanban, memory, skills]", text)
         self.assertNotIn("agent:", text)
 
     def test_worker_toolsets_gain_memory_and_skills(self):
