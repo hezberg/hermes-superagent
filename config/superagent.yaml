@@ -35,13 +35,17 @@ router:
   reasoning_effort: "" # optional; leave empty to use the provider default
 
 workers:
+  # `toolsets` below are the worker's WORK toolsets for its CLI platform
+  # selection. The renderer adds memory + skills automatically, and the
+  # Hermes dispatcher force-adds the kanban lifecycle tools when it
+  # spawns the worker for a card — neither needs listing here.
   - name: general
     profile: sa-worker-general
     role: general # everyday tasks: shell, files, web
     provider: main
     model: "" # your strongest general model
     reasoning_effort: ""
-    toolsets: [terminal, file, web, search, kanban]
+    toolsets: [terminal, file, web]
     max_concurrent: 2
   - name: research
     profile: sa-worker-research
@@ -49,7 +53,7 @@ workers:
     provider: main
     model: ""
     reasoning_effort: ""
-    toolsets: [web, search, file, kanban]
+    toolsets: [web, file]
     max_concurrent: 1
   - name: deep
     profile: sa-worker-deep
@@ -57,7 +61,7 @@ workers:
     provider: main
     model: "" # a reasoning model fits here, if you have one
     reasoning_effort: "" # e.g. high — deep work is where effort pays
-    toolsets: [terminal, file, web, search, kanban]
+    toolsets: [terminal, file, web]
     max_concurrent: 1
 
 # Authorization layer (borrowed from DeepSeek's dsh-superagent-prototype:

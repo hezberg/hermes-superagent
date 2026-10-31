@@ -130,6 +130,16 @@ for p in $PROFILES; do
     "$HERMES_HOME/profiles/$p/skills/worker-superagent/SKILL.md"
 done
 
+# Belt and braces: enable the kanban toolset on the router profile through
+# Hermes' own tooling as well, so the Router can drive the board even if
+# the platform_toolsets key in the rendered config is ever ignored.
+say "== enabling kanban toolset on router profile via hermes tools"
+if [ "$DRY_RUN" = "1" ]; then
+  say "[dry-run] hermes -p $ROUTER_PROFILE tools enable kanban"
+elif ! hermes -p "$ROUTER_PROFILE" tools enable kanban; then
+  say "warning: 'hermes -p $ROUTER_PROFILE tools enable kanban' failed — enable the kanban toolset for that profile manually with: hermes -p $ROUTER_PROFILE tools"
+fi
+
 # ------------------------------------------------------------------ manifest
 say "== writing manifest"
 if [ "$DRY_RUN" != "1" ]; then

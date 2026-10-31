@@ -25,7 +25,7 @@ workers:
     provider: main
     model: deepseek-chat
     reasoning_effort: ""
-    toolsets: [terminal, file, web, search, kanban]
+    toolsets: [terminal, file, web]
     max_concurrent: 2
   - name: research
     profile: sa-worker-research
@@ -33,7 +33,7 @@ workers:
     provider: main
     model: deepseek-chat
     reasoning_effort: ""
-    toolsets: [web, search, file, kanban]
+    toolsets: [web, file]
     max_concurrent: 1
   - name: deep
     profile: sa-worker-deep
@@ -41,7 +41,7 @@ workers:
     provider: main
     model: deepseek-reasoner
     reasoning_effort: ""
-    toolsets: [terminal, file, web, search, kanban]
+    toolsets: [terminal, file, web]
     max_concurrent: 1
 
 policy:

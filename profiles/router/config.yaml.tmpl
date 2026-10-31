@@ -1,15 +1,16 @@
 # Hermes profile: {{PROFILE_NAME}} (Router) — rendered by hermes-superagent.
 # Do not edit by hand; edit superagent.yaml and re-run install.sh.
 #
-# The Router dispatches and reports. It deliberately has NO execution
-# toolsets (no terminal, no file, no web): if it cannot do the work
-# itself, it cannot fall into the "orchestrator does the work itself"
-# failure mode. Its only hands are the Kanban board tools.
+# The Router dispatches and reports. Its CLI toolset selection is
+# deliberately limited to the board (kanban) plus memory and skills —
+# no terminal, no file, no web — so it physically cannot do the work
+# itself. Toolset selection lives under platform_toolsets.<platform>
+# (see docs/ASSUMPTIONS.md; `agent.toolsets` is NOT read by Hermes).
 model:
   provider: "{{HERMES_PROVIDER}}"
   default: "{{MODEL}}"
   base_url: "{{BASE_URL}}"
   api_key_env: "{{API_KEY_ENV}}"
   reasoning_effort: "{{REASONING_EFFORT}}"
-agent:
-  toolsets: [kanban]
+platform_toolsets:
+  cli: [kanban, memory, skills]

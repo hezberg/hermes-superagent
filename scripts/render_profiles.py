@@ -55,16 +55,32 @@ def toolsets_yaml(toolsets):
     return "[" + ", ".join(toolsets or []) + "]"
 
 
+# Every worker also gets memory + skills on its CLI platform selection:
+# without `skills` it cannot load its bundled worker skill, and without
+# `memory` it cannot persist anything across sessions. The kanban
+# lifecycle toolset is NOT listed here — the Hermes dispatcher force-adds
+# it to spawned task workers via the HERMES_KANBAN_TASK environment flag.
+WORKER_BASE_TOOLSETS = ("memory", "skills")
+
+
+def worker_toolsets(role_toolsets):
+    out = list(role_toolsets or [])
+    for extra in WORKER_BASE_TOOLSETS:
+        if extra not in out:
+            out.append(extra)
+    return out
+
+
 def render_all(cfg, templates_dir, out_dir):
     """Render every profile. Returns the list of profile dirs written."""
     providers = cfg.get("providers") or {}
     written = []
 
-    jobs = [("router", cfg.get("router") or {}, "router")]
+    jobs = [("router", cfg.get("router") or {}, "router", False)]
     for w in cfg.get("workers") or []:
-        jobs.append((w.get("name", "worker"), w, os.path.join("workers", w.get("name", "worker"))))
+        jobs.append((w.get("name", "worker"), w, os.path.join("workers", w.get("name", "worker")), True))
 
-    for _name, role, template_rel in jobs:
+    for _name, role, template_rel, is_worker in jobs:
         profile = role.get("profile")
         if not profile:
             continue
@@ -79,7 +95,9 @@ def render_all(cfg, templates_dir, out_dir):
                 "MODEL": role.get("model") or "",
                 "REASONING_EFFORT": role.get("reasoning_effort") or "",
                 "ROLE": role.get("role", ""),
-                "TOOLSETS": toolsets_yaml(role.get("toolsets")),
+                "TOOLSETS": toolsets_yaml(
+                    worker_toolsets(role.get("toolsets")) if is_worker else role.get("toolsets")
+                ),
             }
         )
         dest_dir = os.path.join(out_dir, profile)

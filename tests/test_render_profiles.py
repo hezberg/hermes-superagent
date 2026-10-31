@@ -50,8 +50,16 @@ class TestRenderDeepseekExample(unittest.TestCase):
         self.assertIn("deepseek-chat", text)
         self.assertIn("https://api.deepseek.com", text)
         self.assertNotIn("{{", text)
-        # Router must not receive execution toolsets.
-        self.assertIn("[kanban]", text)
+        # Router selection is exactly kanban + memory + skills, via
+        # platform_toolsets (agent.toolsets is not read by Hermes).
+        self.assertIn("platform_toolsets", text)
+        self.assertIn("cli: [kanban, memory, skills]", text)
+        self.assertNotIn("agent:", text)
+
+    def test_worker_toolsets_gain_memory_and_skills(self):
+        text = self.read("sa-worker-general")
+        self.assertIn("platform_toolsets", text)
+        self.assertIn("cli: [terminal, file, web, memory, skills]", text)
 
     def test_deep_worker_gets_reasoner(self):
         self.assertIn("deepseek-reasoner", self.read("sa-worker-deep"))

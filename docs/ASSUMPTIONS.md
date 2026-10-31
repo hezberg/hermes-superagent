@@ -6,17 +6,30 @@ points are isolated so each can be verified (and fixed) in exactly one
 place when the suite meets a real installation:
 
 1. **Profile config model keys** — templates render
-   `model: {provider, default, base_url, api_key_env}` and
-   `agent: {toolsets}`. If your Hermes version names these differently,
-   fix the templates under `profiles/` and the `HERMES_PROVIDER` mapping
-   in `scripts/render_profiles.py` (that mapping is the single place
-   where provider types become Hermes provider values:
-   openai-compatible → `custom`, anthropic → `anthropic`).
-2. **Kanban availability** — the board is expected at
-   `$HERMES_HOME/kanban.db` with a `tasks` table; the `kanban` toolset
-   must be enabled for the Router profile and dispatcher-spawned workers
-   (the wildcard `all` does not enable it). The plugin degrades
-   gracefully (reports "not initialized") when the board is absent.
+   `model: {provider, default, base_url, api_key_env}` and the provider
+   mapping in `scripts/render_profiles.py` (openai-compatible →
+   `custom`, anthropic → `anthropic`). The `model.*` keys were
+   confirmed in the field on 2026-11-01: Hermes' runtime reads
+   `api_key_env` (its log names it `key_env`) and honours base_url and
+   default model from the profile config.
+2. **Toolset selection — RESOLVED (2026-11-01, official Kanban docs +
+   field failure).** Toolsets do NOT live under `agent.toolsets`;
+   v0.1/v0.2.0 rendered exactly that, and the result was a Router
+   session with the full default toolset and no kanban tools at all.
+   The real mechanism: per-platform selection under
+   `platform_toolsets.<platform>` in the profile's config.yaml, or
+   `hermes -p <profile> tools enable <toolset> [--platform <p>]`.
+   Notes that matter:
+   - `all` / `*` never enables `kanban`; it is deliberately opt-in.
+   - A legacy top-level `toolsets:` is only a fallback when no platform
+     selection was ever saved; `agent.disabled_toolsets` stays
+     authoritative.
+   - Dispatcher-spawned workers get the kanban lifecycle toolset
+     force-added via the `HERMES_KANBAN_TASK` env flag, so worker
+     profiles only list their work toolsets (renderer adds memory +
+     skills).
+   v0.2.1 templates write `platform_toolsets` and the installer also
+   runs `hermes -p <router> tools enable kanban` as a second path.
 3. **Plugin API signatures** — registration uses the documented
    `register(ctx)` surface (`register_tool`, `register_hook` with
    `on_session_start` / `on_session_end` / `post_tool_call`,

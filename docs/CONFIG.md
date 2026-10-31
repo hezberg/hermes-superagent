@@ -27,11 +27,14 @@ A map of named providers. Each role references one by name.
 | `profile` | Hermes profile name to create (must be unique) |
 | `provider` | Key into `providers` |
 | `model` | Model id at that provider — entirely your choice |
-| `toolsets` (workers) | Hermes toolsets granted to the worker |
+| `toolsets` (workers) | The worker's work toolsets for its CLI platform selection (rendered into `platform_toolsets.cli`; the renderer adds `memory` + `skills`, and the Hermes dispatcher force-adds the kanban lifecycle tools to spawned task workers — neither needs listing) |
 | `max_concurrent` (workers) | Concurrent tasks per worker |
 
-The Router's toolsets are **not** configurable on purpose: it always gets
-`[kanban]` only. A router that can execute will eventually execute.
+The Router's toolsets are **not** configurable on purpose: its CLI
+platform selection is always `[kanban, memory, skills]` (written as
+`platform_toolsets.cli` in its rendered profile — see ASSUMPTIONS.md
+item 2 for why it lives there). A router that can execute will
+eventually execute.
 
 Each role also accepts an optional `reasoning_effort` (empty = provider
 default), seeded when the profile's session is created.

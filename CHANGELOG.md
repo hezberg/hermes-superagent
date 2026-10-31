@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.1 — 2026-11-01
+
+Field fix from the first live install: the Router had no kanban tools
+at all, and every other tool instead.
+
+- **Toolset selection moved to `platform_toolsets`.** v0.1/v0.2.0
+  rendered `agent.toolsets`, which Hermes does not read; profile
+  sessions silently fell back to the full default toolset (web
+  included) and the deliberately opt-in `kanban` toolset never
+  appeared, so the Router did the work itself and the board stayed
+  empty. Templates now render `platform_toolsets.cli` — Router:
+  `[kanban, memory, skills]`; workers: their work toolsets — and the
+  installer additionally runs `hermes -p <router> tools enable kanban`
+  through Hermes' own tooling as a second path. Verified against the
+  official Kanban docs; ASSUMPTIONS item 2 is now resolved.
+- Worker `toolsets` in the config examples no longer list `kanban`
+  (the dispatcher force-adds the lifecycle tools to spawned workers
+  via `HERMES_KANBAN_TASK`) or `search` (covered by `web`). The
+  renderer unions every worker's selection with `memory` + `skills`
+  so workers can load their bundled skill.
+
 ## 0.2.0 — 2026-10-31
 
 Authorization and reporting layer, adapted from DeepSeek's
