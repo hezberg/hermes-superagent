@@ -36,3 +36,14 @@ place when the suite meets a real installation:
    numbers or ISO-8601 strings. If the board schema differs, adapt
    `board_tasks()` in the plugin; the detection logic itself is
    schema-free and unit-tested.
+7. **Report comments** — the stage derivation reads worker reports from
+   a comment-like table on the board (any table whose name contains
+   "comment", with task and body columns) and parses the `SA-REPORT:`
+   first line. If your Hermes version stores comments elsewhere, adapt
+   `board_reports()`; stages silently fall back to status-only when no
+   reports are found.
+8. **Gate enforcement point** — the Gate (`gate.py`) is pure logic. In
+   v0.2 it is enforced by the Router skill (the Router runs the Gate
+   before judging) and by the status surface; hard enforcement inside
+   the gateway's message path is phase-2 work, once the live install
+   shows where Hermes lets a plugin intercept inbound events.

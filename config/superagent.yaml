@@ -32,6 +32,7 @@ router:
   profile: sa-router
   provider: main
   model: "" # a fast, cheap model fits: routing is a judgement call, not a marathon
+  reasoning_effort: "" # optional; leave empty to use the provider default
 
 workers:
   - name: general
@@ -39,6 +40,7 @@ workers:
     role: general # everyday tasks: shell, files, web
     provider: main
     model: "" # your strongest general model
+    reasoning_effort: ""
     toolsets: [terminal, file, web, search, kanban]
     max_concurrent: 2
   - name: research
@@ -46,6 +48,7 @@ workers:
     role: research # reading, synthesis, long-form reporting
     provider: main
     model: ""
+    reasoning_effort: ""
     toolsets: [web, search, file, kanban]
     max_concurrent: 1
   - name: deep
@@ -53,8 +56,45 @@ workers:
     role: deep # hard reasoning: debugging, design, review
     provider: main
     model: "" # a reasoning model fits here, if you have one
+    reasoning_effort: "" # e.g. high — deep work is where effort pays
     toolsets: [terminal, file, web, search, kanban]
     max_concurrent: 1
+
+# Authorization layer (borrowed from DeepSeek's dsh-superagent-prototype:
+# a deterministic Gate in front of the model's judgement, and an immutable
+# Mandate recorded on every accepted task).
+#
+# The Gate runs BEFORE the Router's model sees a request:
+#   explicit — the sender is on the source's allowed list and addressed
+#              the agent directly: real work may start.
+#   inferred — a proactive candidate (a rule matched, or a listed bot
+#              produced it): work may start only in `auto` accept mode.
+# Anything else is rejected before it costs any model tokens.
+policy:
+  # observe: inferred candidates are recorded ("would accept") but never
+  #          executed — the safe way to start; watch what it would do.
+  # auto:    inferred candidates that match a rule become real work.
+  # Explicit requests from allowed senders are accepted in both modes.
+  accept_mode: observe
+  sources:
+    # The local operator at the CLI is always allowed (explicit).
+    cli:
+      allowed_senders: []
+    # Fill with the identities (in THIS source's own terms — a Feishu
+    # open_id is not a GitHub login) allowed to ask for work. Empty means
+    # nobody: the Gate rejects everything from that source.
+    feishu:
+      allowed_senders: []
+    webhook:
+      allowed_senders: []
+  # Bots whose activity may raise inferred candidates (e.g. CI notifiers).
+  bots: []
+  # Proactive rules, in your own words. The assessment matches candidates
+  # against these; rules can narrow what the agent does unasked, never
+  # widen it beyond the sources' allowed lists.
+  rules: []
+  # - id: ci-failure
+  #   instruction: "A CI failure on the main branch is worth a fix task."
 
 watchdog:
   enabled: true
@@ -66,9 +106,6 @@ watchdog:
   heartbeat_stale_minutes: 15
 
 events:
-  # Speculative execution (start work before being asked, e.g. reproduce a
-  # bug while a group chat is still discussing it) is OFF by default.
-  speculative_execution: false
   # Fast Path: incoming messages matching a rule skip the Router's LLM
   # judgement. Actions: passthrough (straight to the owning worker),
   # drop (ignore), slowpath (normal Router handling — the default).
@@ -78,6 +115,9 @@ events:
 
 limits:
   max_workers: 4
+  # Always keep one worker slot in reserve for a human's follow-up
+  # message, so new work can never starve an existing task's owner.
+  reserved_human_slot: true
   # IM-style channels stay low-noise: the Router's chat replies should be
   # short; detail goes into files / board comments. (words, approx.)
   router_reply_max_words: 100

@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.1.0"
+PLUGIN_VERSION = "0.2.0"
 
 
 # --------------------------------------------------------------------------
@@ -121,6 +121,53 @@ def board_tasks():
     return tasks
 
 
+def board_reports():
+    """Latest SA-REPORT kind per task, parsed from board comments.
+
+    The board's comment storage is a Hermes implementation detail; this
+    reader is deliberately defensive: it looks for any comment-like
+    table with task/body-ish columns and gives up quietly otherwise.
+    Returns {task_id: report-kind}.
+    """
+    from .reports import parse_report
+
+    conn = _board_connect()
+    if conn is None:
+        return {}
+    try:
+        tables = [
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        ]
+        table = next((t for t in tables if "comment" in t.lower()), None)
+        if table is None:
+            return {}
+        cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+        task_col = next((c for c in cols if "task" in c.lower()), None)
+        body_col = next(
+            (c for c in cols if c.lower() in ("body", "text", "content", "comment")),
+            None,
+        )
+        if task_col is None or body_col is None:
+            return {}
+        order = "rowid"  # latest write wins
+        rows = conn.execute(
+            f"SELECT {task_col}, {body_col} FROM {table} ORDER BY {order}"
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    latest = {}
+    for task_id, body in rows:
+        kind = parse_report(body if isinstance(body, str) else "")
+        if kind is not None:
+            latest[task_id] = kind  # later rows overwrite: latest wins
+    return latest
+
+
 # --------------------------------------------------------------------------
 # Activity log (hooks)
 # --------------------------------------------------------------------------
@@ -155,12 +202,15 @@ def _on_post_tool_call(tool_name=None, **kwargs):
 def status_payload():
     cfg = load_suite_config()
     counts = board_counts()
+    from .gate import accept_mode
+
     payload = {
         "plugin_version": PLUGIN_VERSION,
         "config_loaded": bool(cfg),
         "router_profile": (cfg.get("router") or {}).get("profile"),
         "workers": [w.get("profile") for w in cfg.get("workers") or []],
         "watchdog_authority": (cfg.get("watchdog") or {}).get("authority", "report-only"),
+        "accept_mode": accept_mode(cfg.get("policy"), cfg.get("events")),
         "board": counts,
     }
     return payload
@@ -177,7 +227,8 @@ def status_text():
     return (
         f"superagent v{p['plugin_version']} | config: "
         f"{'loaded' if p['config_loaded'] else 'NOT loaded'} | "
-        f"router: {p['router_profile']} | watchdog: {p['watchdog_authority']}\n{board}"
+        f"router: {p['router_profile']} | accept: {p['accept_mode']} | "
+        f"watchdog: {p['watchdog_authority']}\n{board}"
     )
 
 
@@ -221,12 +272,24 @@ def _cli_setup(parser):
 def _cli_handler(args):
     sub = getattr(args, "subcommand", None) or "status"
     if sub == "watchdog":
+        from .reports import stage_for
         from .watchdog_logic import find_stalled
 
         cfg = load_suite_config()
         wd = cfg.get("watchdog") or {}
+        tasks = board_tasks()
+        reports = board_reports()
+        for t in tasks:
+            if t.get("status") in ("done", "archived"):
+                continue
+            stage = stage_for(
+                latest_report=reports.get(t.get("id")),
+                has_assignment=bool(t.get("assignee"))
+                or t.get("status") in ("running", "in_progress"),
+            )
+            print(f"watchdog: task={t.get('id')} status={t.get('status')} stage={stage}")
         findings = find_stalled(
-            board_tasks(),
+            tasks,
             time.time(),
             stall_minutes=wd.get("stall_minutes", 30),
             heartbeat_stale_minutes=wd.get("heartbeat_stale_minutes", 15),
@@ -279,10 +342,11 @@ def register(ctx):
         _cli_setup,
         _cli_handler,
     )
-    skill_path = os.path.join(os.path.dirname(__file__), "skills", "router")
-    if os.path.isdir(skill_path):
-        try:
-            ctx.register_skill("router-superagent", skill_path)
-        except Exception:
-            logger.debug("register_skill unavailable; installer copies the skill instead")
+    for name, dirname in (("router-superagent", "router"), ("worker-superagent", "worker")):
+        skill_path = os.path.join(os.path.dirname(__file__), "skills", dirname)
+        if os.path.isdir(skill_path):
+            try:
+                ctx.register_skill(name, skill_path)
+            except Exception:
+                logger.debug("register_skill unavailable; installer copies the skill instead")
     logger.info("hermes-superagent plugin v%s registered", PLUGIN_VERSION)

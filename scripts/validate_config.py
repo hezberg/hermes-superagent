@@ -18,6 +18,7 @@ except ImportError:
 PROVIDER_TYPES = {"openai-compatible", "anthropic"}
 WATCHDOG_AUTHORITIES = {"report-only", "nudge", "requeue"}
 FASTPATH_ACTIONS = {"passthrough", "drop", "slowpath"}
+ACCEPT_MODES = {"observe", "auto"}
 
 
 def validate(cfg):
@@ -83,6 +84,37 @@ def validate(cfg):
     wd = cfg.get("watchdog") or {}
     if wd.get("authority", "report-only") not in WATCHDOG_AUTHORITIES:
         err(f"watchdog.authority must be one of {sorted(WATCHDOG_AUTHORITIES)}")
+
+    policy = cfg.get("policy")
+    if policy is None:
+        warn("policy section missing — the Gate will default to observe mode, CLI source only")
+    elif not isinstance(policy, dict):
+        err("policy: must be a mapping")
+    else:
+        if policy.get("accept_mode", "observe") not in ACCEPT_MODES:
+            err(f"policy.accept_mode must be one of {sorted(ACCEPT_MODES)}")
+        sources = policy.get("sources") or {}
+        if not isinstance(sources, dict):
+            err("policy.sources: must be a mapping of source name to settings")
+        else:
+            for sname, scfg in sources.items():
+                if not isinstance(scfg, dict):
+                    err(f"policy.sources.{sname}: must be a mapping")
+                elif not isinstance(scfg.get("allowed_senders", []), list):
+                    err(f"policy.sources.{sname}.allowed_senders must be a list")
+        if not isinstance(policy.get("bots", []), list):
+            err("policy.bots must be a list")
+        for i, rule in enumerate(policy.get("rules") or []):
+            if not isinstance(rule, dict) or not rule.get("id") or not rule.get("instruction"):
+                err(f"policy.rules[{i}]: each rule needs an id and an instruction")
+
+    for label, role in [("router", cfg.get("router"))] + [
+        (f"workers[{i}]", w) for i, w in enumerate(cfg.get("workers") or [])
+    ]:
+        if isinstance(role, dict):
+            effort = role.get("reasoning_effort")
+            if effort is not None and not isinstance(effort, str):
+                err(f"{label}.reasoning_effort must be a string (or empty)")
 
     events = cfg.get("events") or {}
     for i, rule in enumerate(events.get("fastpath") or []):

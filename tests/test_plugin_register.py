@@ -55,10 +55,12 @@ class TestPluginRegister(unittest.TestCase):
         for hook in ("on_session_start", "on_session_end", "post_tool_call"):
             self.assertIn(hook, self.ctx.hooks)
         self.assertIn("router-superagent", self.ctx.skills)
+        self.assertIn("worker-superagent", self.ctx.skills)
 
     def test_status_tool_returns_json(self):
         payload = json.loads(self.ctx.tools["sa_status"]({}))
-        self.assertEqual(payload["plugin_version"], "0.1.0")
+        self.assertEqual(payload["plugin_version"], "0.2.0")
+        self.assertEqual(payload["accept_mode"], "observe")
         self.assertFalse(payload["config_loaded"])  # nothing installed in tmp home
         self.assertIsNone(payload["board"])  # no kanban.db yet
 

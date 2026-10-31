@@ -7,10 +7,14 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.1.0 — CLI skeleton.** The repository layout, configuration
-> system, plugin registration, profile rendering, install/uninstall cycle
-> and the pure decision logic (Fast Path, Watchdog stall detection) are in
-> place and unit-tested. End-to-end dispatch on a live Hermes install is
+> **Status: v0.2.0.** On top of the v0.1 skeleton (layout, configuration
+> system, plugin registration, profile rendering, install/uninstall
+> cycle, unit-tested pure logic), v0.2 adds the authorization layer
+> adapted from DeepSeek's own prototype: a deterministic **Gate** in
+> front of the Router's judgement, immutable **Mandates** on accepted
+> tasks, `observe`/`auto` accept modes, a structured worker **Report**
+> taxonomy with a derived stage table, and an agent-guided
+> [SETUP.md](SETUP.md). End-to-end dispatch on a live Hermes install is
 > the next milestone. Design choices that depend on the exact Hermes
 > version are listed in [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md).
 
@@ -72,10 +76,30 @@ Uninstall (removes exactly what the install manifest recorded):
   never hard-coded. Keys live only in environment variables.
 - **The Router cannot do the work itself** — its profile ships without
   execution toolsets. Dispatching is enforced by capability, not by hope.
+- **Authorization precedes judgement.** A deterministic Gate checks the
+  sender against per-source allowed lists before any model sees the
+  request; every accepted task records an immutable Mandate (policy
+  version, scope, strength). Proactive work starts in `observe` mode:
+  recorded, never executed, until the operator switches to `auto`.
+- **Workers report in an enum, not prose** (`SA-REPORT: ready|blocked|…`),
+  and task stages are derived from those reports — so the Watchdog
+  reasons over facts, with timestamp stall detection as a fallback.
 - **Watchdog defaults to report-only.** It surfaces stalled tasks; acting
   on them (nudge / requeue) is an explicit opt-in in the config.
 - **Installs are reversible.** Everything the installer creates is listed
   in a manifest; uninstall removes exactly that list and verifies.
+
+## Design references
+
+- DeepSeek Harness team, 《Super-agent 设计探索：迈向更自主的 Agent 系统》
+  (Oct 2026) — the architecture this suite follows.
+- [deepseek-ai/dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)
+  — DeepSeek's own research prototype for their Harness. The Gate /
+  Mandate / accept-mode design, the Report taxonomy, the store-first
+  Outbox discipline and the agent-guided SETUP pattern are adapted from
+  it (MIT). Its scope — one GitHub repository, DSH sessions — differs
+  from this suite's (general dispatch on Hermes); mechanisms were
+  borrowed, not the codebase.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the five modules
 of the original design map onto Hermes, including the one module that is

@@ -122,6 +122,14 @@ run mkdir -p "$HERMES_HOME/profiles/$ROUTER_PROFILE/skills/router-superagent"
 run cp "$SCRIPT_DIR/plugin/superagent/skills/router/SKILL.md" \
   "$HERMES_HOME/profiles/$ROUTER_PROFILE/skills/router-superagent/SKILL.md"
 
+say "== installing worker skill -> worker profiles"
+for p in $PROFILES; do
+  [ "$p" = "$ROUTER_PROFILE" ] && continue
+  run mkdir -p "$HERMES_HOME/profiles/$p/skills/worker-superagent"
+  run cp "$SCRIPT_DIR/plugin/superagent/skills/worker/SKILL.md" \
+    "$HERMES_HOME/profiles/$p/skills/worker-superagent/SKILL.md"
+done
+
 # ------------------------------------------------------------------ manifest
 say "== writing manifest"
 if [ "$DRY_RUN" != "1" ]; then

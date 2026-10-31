@@ -77,6 +77,7 @@ def render_all(cfg, templates_dir, out_dir):
             {
                 "PROFILE_NAME": profile,
                 "MODEL": role.get("model") or "",
+                "REASONING_EFFORT": role.get("reasoning_effort") or "",
                 "ROLE": role.get("role", ""),
                 "TOOLSETS": toolsets_yaml(role.get("toolsets")),
             }
