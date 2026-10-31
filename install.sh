@@ -21,12 +21,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 CONFIG="$SCRIPT_DIR/config/superagent.yaml"
+CONFIG_EXPLICIT=0
 DRY_RUN=0
 FORCE=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --config) CONFIG="$2"; shift 2 ;;
+    --config) CONFIG="$2"; CONFIG_EXPLICIT=1; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --force) FORCE=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -48,6 +49,14 @@ command -v python3 >/dev/null 2>&1 || { say "ERROR: python3 not found."; exit 1;
   say "ERROR: HERMES_HOME ($HERMES_HOME) does not exist. Run Hermes once first."
   exit 1
 }
+
+# Config source of truth: once the user has a filled-in copy installed
+# under $HERMES_HOME/superagent/, that copy wins over a pristine repo
+# template — a git pull must never clobber the user's real config.
+SUITE_CFG="$HERMES_HOME/superagent/superagent.yaml"
+if [ "$CONFIG_EXPLICIT" != "1" ] && [ -f "$SUITE_CFG" ]; then
+  CONFIG="$(python3 "$SCRIPT_DIR/scripts/pick_config.py" "$CONFIG" "$SUITE_CFG")"
+fi
 [ -f "$CONFIG" ] || { say "ERROR: config not found: $CONFIG"; exit 1; }
 
 say "== validating config: $CONFIG"
@@ -115,7 +124,11 @@ fi
 
 say "== installing suite config -> $HERMES_HOME/superagent/superagent.yaml"
 run mkdir -p "$HERMES_HOME/superagent"
-run cp "$CONFIG" "$HERMES_HOME/superagent/superagent.yaml"
+if [ "$CONFIG" = "$SUITE_CFG" ]; then
+  say "(config already lives at the suite path; keeping it as-is)"
+else
+  run cp "$CONFIG" "$HERMES_HOME/superagent/superagent.yaml"
+fi
 
 say "== installing router skill -> profile $ROUTER_PROFILE"
 run mkdir -p "$HERMES_HOME/profiles/$ROUTER_PROFILE/skills/router-superagent"
@@ -166,15 +179,34 @@ fi
 say "== smoke check"
 run python3 "$SCRIPT_DIR/scripts/validate_config.py" "$HERMES_HOME/superagent/superagent.yaml"
 
+say "== checking the plugin responds"
+PLUGIN_OK=0
+if [ "$DRY_RUN" = "1" ]; then
+  say "[dry-run] hermes superagent status"
+  PLUGIN_OK=1
+elif hermes superagent status >/dev/null 2>&1; then
+  PLUGIN_OK=1
+  say "plugin OK: 'hermes superagent status' 可用（status / doctor / digest / watchdog 都走它）"
+else
+  say "注意：'hermes superagent status' 现在还不可用——这个 Hermes 版本可能还没加载插件。"
+  say "看板分发主链路不依赖插件（靠 profile + gateway 分发器），可以先用；status/doctor/digest/watchdog 要等插件加载后才有。"
+  say "排查时请保留这条命令的输出：grep -rin plugin ~/.hermes/logs/ | tail -20"
+fi
+
 cat <<EOF
 
-Done. Next steps:
-  1. Put your API key(s) in the environment of each profile gateway, e.g.
-     export the variable named by api_key_env in your config
-     (DeepSeek example: SUPERAGENT_MAIN_API_KEY).
-  2. Start the gateways for the router and worker profiles and send the
-     router a task from the Hermes CLI.
-  3. Optional: schedule the watchdog — see docs/CONFIG.md.
+Done. 这次生效的配置：$CONFIG
+它已存到 $HERMES_HOME/superagent/superagent.yaml —— 以后以那份为准：
+改配置就改它（或安装时 --config 指定），仓库模板被 git pull 覆盖也不会再冲掉你填好的值。
+
+Next steps:
+  1. API key：把每个 provider 的 key 写进 ~/.hermes/.env，一行一个：
+       <api_key_env 里填的变量名>=<key 本身>
+     然后运行：hermes gateway restart
+  2. 体检：hermes superagent doctor —— 整套检查，人话结论 + 修法。
+  3. 派活：hermes --profile $ROUTER_PROFILE，在对话里直接说任务即可。
+     进度在 hermes dashboard 的 Kanban 页看；成果会记入
+     $HERMES_HOME/superagent/journal.md。
 Uninstall at any time with ./uninstall.sh (removes only what the
 manifest lists).
 EOF
