@@ -112,6 +112,7 @@ def board_tasks():
         tasks.append(
             {
                 "id": d.get("id"),
+                "title": d.get("title"),
                 "status": d.get("status"),
                 "assignee": d.get("assignee") or d.get("profile"),
                 "updated_at": _epoch(d.get("updated_at")),
@@ -169,13 +170,16 @@ def board_reports():
 
 
 def board_events():
-    """Native board events per task: {task_id: [{type, ts}, ...]}.
+    """Native board events per task: {task_id: [{type, ts, ...}, ...]}.
 
     Reads the board's event table (Hermes writes one row per lifecycle
     transition: created / claimed / completed / blocked / …). Same
     defensive posture as board_reports(): the storage layout is a
     Hermes implementation detail, so any mismatch quietly yields {}.
-    Events are returned in write order (oldest first).
+    Events are returned in write order (oldest first). When an event
+    carries a JSON payload, its `summary` and `artifacts` fields are
+    lifted onto the event dict (that is where kanban_complete records
+    the handoff).
     """
     conn = _board_connect()
     if conn is None:
@@ -200,22 +204,88 @@ def board_events():
             (c for c in cols if "creat" in c.lower() or c.lower() in ("ts", "time", "at")),
             None,
         )
+        payload_col = next(
+            (c for c in cols if c.lower() in ("payload", "data", "detail", "details")),
+            None,
+        )
         if task_col is None or type_col is None:
             return {}
         ts_expr = ts_col if ts_col else "NULL"
+        payload_expr = payload_col if payload_col else "NULL"
         rows = conn.execute(
-            f"SELECT {task_col}, {type_col}, {ts_expr} FROM {table} ORDER BY rowid"
+            f"SELECT {task_col}, {type_col}, {ts_expr}, {payload_expr} FROM {table} ORDER BY rowid"
         ).fetchall()
     except sqlite3.Error:
         return {}
     finally:
         conn.close()
     events = {}
-    for task_id, etype, ts in rows:
-        events.setdefault(task_id, []).append(
-            {"type": etype, "ts": _epoch(ts)}
-        )
+    for task_id, etype, ts, payload in rows:
+        event = {"type": etype, "ts": _epoch(ts)}
+        if isinstance(payload, str) and payload:
+            try:
+                data = json.loads(payload)
+            except ValueError:
+                data = None
+            if isinstance(data, dict):
+                if data.get("summary"):
+                    event["summary"] = data["summary"]
+                if data.get("artifacts"):
+                    event["artifacts"] = data["artifacts"]
+        events.setdefault(task_id, []).append(event)
     return events
+
+
+# --------------------------------------------------------------------------
+# Journal (suite-level memory of finished work)
+# --------------------------------------------------------------------------
+
+def _journal_jsonl():
+    return os.path.join(suite_dir(), "journal.jsonl")
+
+
+def journal_entries():
+    """All journal entries, oldest first. [] when none exist yet."""
+    entries = []
+    try:
+        with open(_journal_jsonl(), "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(json.loads(line))
+                    except ValueError:
+                        continue
+    except OSError:
+        pass
+    return entries
+
+
+def sync_journal():
+    """Record any newly-terminal cards into the journal.
+
+    Returns the list of entries added by this sync. Safe to call
+    repeatedly (idempotent by entry key). Failures are swallowed into
+    an empty result: the journal is memory, not a gate.
+    """
+    from .journal import entry_key, new_entries, render_journal_md
+
+    try:
+        existing = journal_entries()
+        seen = {entry_key(e) for e in existing}
+        fresh = new_entries(board_tasks(), board_events(), seen)
+        if not fresh:
+            return []
+        os.makedirs(suite_dir(), exist_ok=True)
+        with open(_journal_jsonl(), "a", encoding="utf-8") as fh:
+            for entry in fresh:
+                fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        with open(os.path.join(suite_dir(), "journal.md"), "w", encoding="utf-8") as fh:
+            fh.write(render_journal_md(existing + fresh))
+        return fresh
+    except Exception:
+        logger.debug("journal sync failed", exc_info=True)
+        return []
 
 
 # --------------------------------------------------------------------------
@@ -254,6 +324,15 @@ def status_payload():
     counts = board_counts()
     from .gate import accept_mode
 
+    recent = [
+        {
+            "title": e.get("title"),
+            "assignee": e.get("assignee"),
+            "outcome": e.get("outcome"),
+            "ts": e.get("ts"),
+        }
+        for e in journal_entries()[-5:]
+    ]
     payload = {
         "plugin_version": PLUGIN_VERSION,
         "config_loaded": bool(cfg),
@@ -262,6 +341,7 @@ def status_payload():
         "watchdog_authority": (cfg.get("watchdog") or {}).get("authority", "report-only"),
         "accept_mode": accept_mode(cfg.get("policy"), cfg.get("events")),
         "board": counts,
+        "recent_outcomes": recent,
     }
     return payload
 
@@ -274,12 +354,17 @@ def status_text():
         board = "kanban board: " + ", ".join(
             f"{k}={v}" for k, v in sorted(p["board"].items())
         )
-    return (
+    text = (
         f"superagent v{p['plugin_version']} | config: "
         f"{'loaded' if p['config_loaded'] else 'NOT loaded'} | "
         f"router: {p['router_profile']} | accept: {p['accept_mode']} | "
         f"watchdog: {p['watchdog_authority']}\n{board}"
     )
+    if p["recent_outcomes"]:
+        from .journal import render_digest
+
+        text += "\n" + render_digest(journal_entries(), limit=3)
+    return text
 
 
 def handle_sa_status(params, **kwargs):
@@ -317,11 +402,23 @@ def _cli_setup(parser):
     sub = parser.add_subparsers(dest="subcommand")
     sub.add_parser("status", help="Show superagent status")
     sub.add_parser("watchdog", help="Report stalled tasks (report-only)")
+    sub.add_parser("digest", help="Sync the journal and print recent outcomes")
 
 
 def _cli_handler(args):
     sub = getattr(args, "subcommand", None) or "status"
+    if sub == "digest":
+        from .journal import render_digest
+
+        fresh = sync_journal()
+        if fresh:
+            print(f"journal: 记录了 {len(fresh)} 条新成果")
+        print(render_digest(journal_entries()))
+        return 0
     if sub == "watchdog":
+        fresh = sync_journal()
+        if fresh:
+            print(f"journal: 记录了 {len(fresh)} 条新成果")
         from .reports import derive_report, stage_for
         from .watchdog_logic import find_stalled
 
