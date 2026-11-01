@@ -10,90 +10,67 @@ tasks instead of babysitting one session at a time.
 > **Status: v0.12.0.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). The suite is built from Hermes'
-> own mechanisms wherever they exist: each profile's identity is
-> its SOUL.md, role skills are auto-loaded into every session,
-> profile memory is seeded once and then belongs to the agent,
-> Feishu reaches the Router through native profile routing, and
-> completion pushes ride Hermes' native subscriptions wherever
-> they exist. It keeps no provider system of its own — each role
-> *selects* a provider and model that already exist in your
-> Hermes config (blank = inherit the default profile's model),
-> and API keys live in one place, `~/.hermes/.env`, converged
-> into every profile automatically. One guided wizard
-> (`hermes superagent setup`) walks topology, per-role models —
-> with the model list fetched live from the provider you pick —
-> and the Feishu entry; it is transactional, so abandoning it
-> midway changes nothing on disk. Underneath: a deterministic
-> **Gate** in front of the Router's judgement, immutable
-> **Mandates** on accepted tasks, `observe`/`auto` accept modes,
-> a **journal** that turns finished work into recallable memory,
-> a plain-language **`doctor`**, and a ledger-governed reminder
-> tick that speaks only when unclosed work needs you.
-> `hermes superagent uninstall` removes the suite itself.
-> Product direction — Hermes-native, last-mile first, no
-> pure-geek tooling — is binding: [docs/PRINCIPLES.md](docs/PRINCIPLES.md).
-> Field lessons: [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md).
-
-## Why
-
-Single-session agents cap out at the human's attention: one person can
-follow roughly 3–5 active sessions. This suite restructures Hermes into
-two layers — a resident Router that only talks, decomposes and dispatches,
-and isolated Worker profiles that execute — with the Kanban board as the
-durable handoff between them.
+> own mechanisms wherever they exist, keeps no provider system of
+> its own (roles select from your Hermes config; keys converge
+> onto `~/.hermes/.env`), and adds the product layer around it —
+> a transactional setup wizard, a recallable journal, a
+> plain-language `doctor`, ledger-governed reminders, and
+> one-command install / upgrade / uninstall. Product direction —
+> Hermes-native, last-mile first, no pure-geek tooling — is
+> binding: [docs/PRINCIPLES.md](docs/PRINCIPLES.md). Field
+> lessons: [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md).
 
 ## Quickstart
 
-Requirements: Hermes (latest) already installed and run at least once.
-Nothing else — the suite runs on Hermes' own Python (it carries its
-own YAML fallback; Hermes' Python has no PyYAML) and needs no extra
-packages. Linux (Ubuntu 24.04) and macOS.
+Requirements: Hermes (latest), installed and run at least once.
+Linux (Ubuntu 24.04) and macOS.
 
-### Guided: the setup wizard
-
-After the one-line install below, run:
-
-```bash
-hermes superagent setup
-```
-
-The wizard refuses to start until your default Hermes profile has a
-model (it sends you to `hermes setup` first — the suite builds on
-Hermes' own configuration, never replaces it), then walks you
-through: worker topology (one general worker by default; research
-and deep specialists are opt-in), a provider/model choice per role
-— after you pick a provider it fetches that endpoint's live model
-list for you to choose from — and an optional Feishu entry: paste
-a new dedicated app's credentials, or bind through Hermes' own
-setup (QR included). The Feishu rules are strict by design: one
-app serves exactly one profile, a duplicate App ID is a hard
-stop, and a binding that produced no Feishu app sends you back
-into the step instead of waving you through. The whole wizard is
-transactional — quit or Ctrl-C before its commit point and
-nothing on disk changes. It finishes with kanban ready, reminder
-delivery set, and a doctor verdict. Re-running it reconfigures in
-place.
-
-### Recommended: one line, nothing left in your home directory
+### 1. Install — one line
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/bootstrap.sh | sh
 ```
 
-The bootstrap keeps the suite's source inside Hermes' own directory
-(`~/.hermes/superagent/src` — the plugin, profiles, config, and
-history all live under `~/.hermes/` too) and runs the installer. If
-your default Hermes profile already talks to a model, that is
-nearly all: roles inherit its model setup by default, and each
-profile's copy of the API key is converged onto the one value in
-`~/.hermes/.env` automatically. One `hermes gateway restart`
-and you can talk to the Router (`hermes --profile sa-router`).
-To give a role a different provider or model, select from what
-your Hermes already has — `hermes superagent set-model <profile>
-<model>`, or edit `~/.hermes/superagent/superagent.yaml`; config
-edits apply automatically on the next command, no reinstall.
-Upgrades are simply `hermes superagent upgrade` — no checkout to
-remember, anywhere.
+This clones the suite into `~/.hermes/superagent/src` and runs the
+installer once. If your default Hermes profile already talks to a
+model, that single run is a complete install: roles inherit the
+default model, keys converge from `~/.hermes/.env`, kanban and the
+reminder job are set up, and a doctor verdict prints at the end.
+Then one `hermes gateway restart`, and the Router answers at
+`hermes --profile sa-router`.
+
+Notes:
+- Fresh Hermes with no model yet? Run `hermes setup` first — the
+  suite builds on Hermes' own configuration, never replaces it.
+- Nothing is left in your home directory; re-running the line
+  updates the managed clone and re-converges.
+
+### 2. Configure — the wizard (only for non-defaults)
+
+```bash
+hermes superagent setup
+```
+
+Defaults already work; run the wizard when you want something
+else: extra workers (research/deep specialists are opt-in; one
+general worker is the default), a different provider or model per
+role — chosen from a list fetched live from the provider's own
+endpoint — a Feishu entry, or a delivery platform for reminders.
+Strict where it matters: one Feishu app serves exactly one
+profile (a duplicate is a hard stop, not a warning), and a
+binding that produced no app sends you back into the step. The
+wizard is transactional: quit before its commit point and
+nothing on disk changes. Re-running it reconfigures in place;
+everyday tweaks are lighter still —
+`hermes superagent set-model <profile> <model>`, or edit
+`~/.hermes/superagent/superagent.yaml` (edits apply automatically,
+no reinstall).
+
+Straight into the wizard on a fresh machine:
+`curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/bootstrap.sh | sh -s -- --wizard`.
+
+Upgrades: `hermes superagent upgrade`. Uninstall:
+`hermes superagent uninstall` (data kept unless `--purge`).
 
 ### Or: let Hermes install it for you
 
@@ -148,20 +125,39 @@ python3 scripts/install.py
 hermes --profile sa-router
 ```
 
-Uninstall (removes exactly what the install state recorded; your
-config and history are kept unless you pass `--purge`):
+## Beyond the design article
 
-```bash
-hermes superagent uninstall          # add --purge to remove data too
-```
+DeepSeek's article (and their dsh prototype) supplies the
+architecture and the Gate / Mandate / Report discipline. Everything
+that makes it a product you can install — and leave alone — is
+this suite's own work:
 
-Upgrading later does not need the checkout at all — the installed
-suite upgrades itself (it records where its source lives, and keeps
-its own clone if that is ever lost):
-
-```bash
-hermes superagent upgrade
-```
+- **A full lifecycle, each step one command:** bootstrap install,
+  `upgrade`, self-`uninstall`, generation snapshots with
+  `--rollback` — and a setup wizard that is transactional
+  (nothing on disk changes until it commits).
+- **Configuration with a single source of truth:** roles select
+  providers/models Hermes already has (no parallel system to
+  maintain), keys converge onto `~/.hermes/.env`, edits apply
+  automatically — no "now re-run the installer" step, ever.
+- **Hermes-native adoption, researched at source level:** SOUL.md
+  identities, auto-loaded role skills, per-profile memory seeds,
+  native profile routing for chat entry, native completion
+  subscriptions — with the reminder tick covering only the
+  CLI-origin gap Hermes deliberately leaves.
+- **Co-managed profiles:** renders never clobber what Hermes' own
+  wizards wrote into a profile (your platform credentials survive
+  every reconcile).
+- **Memory and supervision for the operator:** the journal turns
+  finished cards into recallable memory (`digest` / `recall`),
+  reminders dedupe by fingerprint with backoff and stay silent
+  when nothing changed, and `doctor` answers in plain language
+  with the exact fix.
+- **Guardrails at the seams:** duplicate Feishu apps hard-stop,
+  empty bindings loop back, missing keys are diagnosed by their
+  actual line state — not asserted.
+- **221 unit tests** over the installer, renderer, wizard,
+  journal, reminders and CLI, run on every release.
 
 ## Layout
 
