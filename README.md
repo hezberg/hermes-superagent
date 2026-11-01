@@ -20,6 +20,10 @@ tasks instead of babysitting one session at a time.
 > [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) item 9; the product
 > direction — Hermes-native, last-mile first, no pure-geek tooling —
 > is binding and written down in [docs/PRINCIPLES.md](docs/PRINCIPLES.md).
+> v0.3 adds the **journal** (finished work becomes recallable global
+> memory) and a plain-language **`doctor`**; v0.4 adds **proactive
+> reminders** for unclosed work — a ledger-governed cron tick that
+> speaks only when a blocked, stalled, or unreviewed task needs you.
 
 ## Why
 
@@ -34,6 +38,35 @@ durable handoff between them.
 Requirements: Hermes (latest) already installed and run at least once,
 Python 3 with PyYAML (ships with Hermes). Linux (Ubuntu 24.04) and macOS.
 
+### Recommended: let Hermes install it for you
+
+Open a chat with your stock Hermes (default profile, CLI or Desktop)
+and paste the prompt below — also saved as
+[INSTALL_PROMPT.md](INSTALL_PROMPT.md). Hermes follows
+[SETUP.md](SETUP.md): it probes your install, asks a few questions one
+at a time (each with a recommended answer), shows you a plan, and only
+then installs. **The one step that stays with you is entering your API
+key** — in your own terminal, into `~/.hermes/.env`, never in the chat.
+
+<details>
+<summary>Install prompt (click to expand)</summary>
+
+请帮我安装并配置 hermes-superagent，全程按它仓库里的 SETUP.md 执行：
+
+1. 先克隆仓库：`git clone https://github.com/hezberg/hermes-superagent.git`（已存在就先 `git pull` 更新）。
+2. 完整读一遍 SETUP.md，按它走：先探查、再逐个问我问题（一个问题一条消息、带上你的推荐答案）、把计划汇总成一条消息让我确认，确认后才动手。
+3. 硬规则：
+   - 绝不要让我在聊天里发 API key，也不要读取、打印或保存任何 key 的值。到需要 key 时，给我确切的一行（`<变量名>=<key>`，写进 `~/.hermes/.env`），我自己在终端完成，你只确认变量名已就位。
+   - 配置先写好让我确认再安装；不要手改 `~/.hermes/profiles/` 下渲染出的任何文件；安装后以 `~/.hermes/superagent/superagent.yaml` 为准。
+   - 如果你正运行在 gateway 对话里，重启 gateway 前先提醒我对话会中断，并把重启放在最后一步。
+4. 完成标准，逐项核对后才算完：`install.sh` 成功；`hermes superagent status` 可用；`hermes superagent doctor` 没有任何 ✗；最后用 sa-router 试跑一个小任务，看板上有卡且能跑完。
+5. 提醒投递：装完问我未闭环提醒发到哪个平台，帮我把 cron 任务的 `--deliver` 指过去；我说以后再定的话，跳过并在交接里写清补法。
+6. 全部完成以后，用一段人话向我交接：怎么派活、在哪看进度、怎么卸载。
+
+</details>
+
+### Manual install
+
 ```bash
 git clone https://github.com/hezberg/hermes-superagent.git
 cd hermes-superagent
@@ -43,14 +76,16 @@ cd hermes-superagent
 cp config/examples/deepseek.yaml config/superagent.yaml   # or edit the template
 $EDITOR config/superagent.yaml
 
-# 2. Install (additive only; refuses to overwrite anything silently)
+# 2. Install (additive only; refuses to overwrite anything silently;
+#    enables the plugin and registers the reminder cron for you)
 ./install.sh
 
-# 3. Provide keys — never in the yaml; the config names an env var
-export SUPERAGENT_MAIN_API_KEY=...   # use your provider's key
+# 3. Provide keys — never in the yaml; the config names an env var.
+#    Add one line to ~/.hermes/.env, then restart the gateway:
+#      SUPERAGENT_MAIN_API_KEY=<your key>
 
-# 4. Start the router + worker profile gateways, then talk to the Router
-#    from the Hermes CLI and give it a task.
+# 4. Talk to the Router from the Hermes CLI and give it a task:
+hermes --profile sa-router
 ```
 
 Uninstall (removes exactly what the install manifest recorded):
@@ -70,7 +105,9 @@ Uninstall (removes exactly what the install manifest recorded):
 | `scripts/` | Config validation and profile rendering |
 | `tests/` | Unit tests: `python3 -m unittest discover -s tests` |
 | `install.sh` / `uninstall.sh` | One-click install / verified-clean uninstall |
-| `docs/` | Architecture mapping, config reference, assumptions |
+| `SETUP.md` | The agent-guided setup runbook (probe → questions → plan → execute → hand over) |
+| `INSTALL_PROMPT.md` | The paste-ready prompt that hands the setup to your Hermes |
+| `docs/` | Architecture mapping, config reference, assumptions, product principles |
 
 ## Design notes
 
