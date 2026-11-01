@@ -1,8 +1,8 @@
 """hermes-superagent plugin.
 
 In-process pieces of the Super-agent layer:
-  - /tasks command      — Kanban board summary for the human
-  - /stop command       — ask the Router to block a task (via kanban tools)
+  - /board command      — Kanban board summary for the human
+  - /block command      — ask the Router to block a task (via kanban tools)
   - sa_status tool      — machine-readable status for the Router / Watchdog
   - activity hooks      — append-only JSONL log under
                           $HERMES_HOME/superagent/activity.jsonl; this is
@@ -26,7 +26,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.12.1"
+PLUGIN_VERSION = "0.12.2"
 
 
 # --------------------------------------------------------------------------
@@ -697,7 +697,7 @@ async def cmd_tasks(ctx, args="", **kwargs):
 async def cmd_stop(ctx, args="", **kwargs):
     task_id = (args or "").strip()
     if not task_id:
-        return "Usage: /stop <task-id> — ask the Router to block that task."
+        return "Usage: /block <task-id> — ask the Router to block that task."
     # The Router owns the board; go through its kanban tools when available.
     try:
         result = ctx.dispatch_tool("kanban_block", {"task_id": task_id})
@@ -1003,10 +1003,23 @@ def register(ctx):
     ctx.register_hook("on_session_start", _on_session_start)
     ctx.register_hook("on_session_end", _on_session_end)
     ctx.register_hook("post_tool_call", _on_post_tool_call)
-    ctx.register_command(
-        "tasks", cmd_tasks, "Show the superagent Kanban board summary"
-    )
-    ctx.register_command("stop", cmd_stop, "Block a kanban task by id")
+    # NOT "tasks" / "stop": both are Hermes built-in commands
+    # (tasks is an alias of /agents; stop kills background
+    # processes), and Hermes silently SKIPS a plugin command whose
+    # name conflicts with a built-in — the registration just never
+    # takes effect (verified in hermes_cli/plugins.py). A skipped
+    # registration returns None: log it loudly, never silently.
+    for name, handler, desc in (
+        ("board", cmd_tasks, "Show the superagent Kanban board summary"),
+        ("block", cmd_stop, "Block a kanban task by id"),
+    ):
+        if ctx.register_command(name, handler, desc) is None:
+            logger.warning(
+                "superagent: slash command /%s was NOT registered "
+                "(Hermes skips plugin commands that conflict with a "
+                "built-in). The board remains available via "
+                "`hermes kanban list` and `hermes superagent status`.",
+                name)
     ctx.register_cli_command(
         "superagent",
         "Super-agent layer status and watchdog",

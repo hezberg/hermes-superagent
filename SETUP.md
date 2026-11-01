@@ -157,7 +157,7 @@ Ask for one confirmation.
 One short message:
 
 - How to try it: from the CLI, give the Router one small real task and
-  watch the card appear on the board (`/tasks` shows the summary).
+  watch the card appear on the board (`/board` shows the summary).
 - The three operator rules: start narrow (few allowed senders, observe
   mode), tune for less noise, and read what the agent sends in your
   name — you own it.

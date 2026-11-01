@@ -23,6 +23,7 @@ class FakeCtx:
 
     def register_command(self, name, handler, description="", **kw):
         self.commands[name] = handler
+        return object()  # Hermes returns a registration on success
 
     def register_cli_command(self, name, help, setup_fn, handler_fn, **kw):
         self.cli_commands[name] = handler_fn
@@ -49,8 +50,13 @@ class TestPluginRegister(unittest.TestCase):
 
     def test_registers_everything(self):
         self.assertIn("sa_status", self.ctx.tools)
-        self.assertIn("tasks", self.ctx.commands)
-        self.assertIn("stop", self.ctx.commands)
+        self.assertIn("board", self.ctx.commands)
+        self.assertIn("block", self.ctx.commands)
+        # "tasks" and "stop" are Hermes built-ins; Hermes silently
+        # skips plugin commands with those names, so the suite must
+        # never try to register them again.
+        self.assertNotIn("tasks", self.ctx.commands)
+        self.assertNotIn("stop", self.ctx.commands)
         self.assertIn("superagent", self.ctx.cli_commands)
         for hook in ("on_session_start", "on_session_end", "post_tool_call"):
             self.assertIn(hook, self.ctx.hooks)
@@ -59,7 +65,7 @@ class TestPluginRegister(unittest.TestCase):
 
     def test_status_tool_returns_json(self):
         payload = json.loads(self.ctx.tools["sa_status"]({}))
-        self.assertEqual(payload["plugin_version"], "0.12.1")
+        self.assertEqual(payload["plugin_version"], "0.12.2")
         self.assertEqual(payload["accept_mode"], "observe")
         self.assertFalse(payload["config_loaded"])  # nothing installed in tmp home
         self.assertIsNone(payload["board"])  # no kanban.db yet
@@ -76,3 +82,21 @@ class TestPluginRegister(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SkippingCtx(FakeCtx):
+    """Mimics Hermes skipping a registration (returns None)."""
+
+    def register_command(self, name, handler, description="", **kw):
+        return None
+
+
+class TestSkippedRegistrationIsLoud(unittest.TestCase):
+    def test_none_registration_logs_a_warning(self):
+        tmp = tempfile.TemporaryDirectory()
+        os.environ["HERMES_HOME"] = tmp.name
+        import superagent
+        with self.assertLogs(superagent.logger, level="WARNING") as logs:
+            superagent.register(SkippingCtx())
+        self.assertTrue(any("/board" in line for line in logs.output))
+        tmp.cleanup()

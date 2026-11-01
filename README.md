@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.12.1.** The dispatch chain is verified end-to-end on a
+> **Status: v0.12.2.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). The suite is built from Hermes'
 > own mechanisms wherever they exist, keeps no provider system of
@@ -106,6 +106,8 @@ the work itself. Big jobs become linked parent/child cards, and
 every card carries its goal and completion contract with it.
 
 **Watch progress.**
+- In chat: `/board` — the suite's live board summary (what's
+  running, blocked, just finished).
 - The board itself, in the terminal: `hermes kanban list` —
   every card, its status and its assignee (Hermes' own board
   CLI; `hermes kanban` alone shows the other board verbs).
@@ -127,9 +129,9 @@ for recent completions, `hermes superagent recall <keyword>` for
 a specific one. Asking the Router "what happened with X?" works
 too — finished work is its long-term memory.
 
-**Steer or stop.** `/stop` in chat asks the Router to block a
-running task; plain language works as well ("hold the research
-card until I say go").
+**Steer or stop.** `/block <task-id>` in chat blocks a card
+(`/board` shows the ids); plain language to the Router works as
+well ("hold the research card until I say go").
 
 **Look after it.** `hermes superagent doctor` — a plain-language
 health check that names the fix, not just the fault. Change a
@@ -176,7 +178,7 @@ this suite's own work:
 |---|---|
 | `config/superagent.yaml` | The one configuration file (template with guidance) |
 | `config/examples/` | Filled examples (DeepSeek) |
-| `plugin/superagent/` | The Hermes plugin: `/tasks`, `/stop`, `sa_status`, activity hooks, the setup wizard, and the `hermes superagent` CLI (status, doctor, journal / digest / recall, providers, set-model, setup, upgrade, uninstall) |
+| `plugin/superagent/` | The Hermes plugin: `/board`, `/block`, `sa_status`, activity hooks, the setup wizard, and the `hermes superagent` CLI (status, doctor, journal / digest / recall, providers, set-model, setup, upgrade, uninstall) |
 | `profiles/` | Router / worker profile templates (config, SOUL.md identity, memory seed, skills) rendered at install time |
 | `scripts/` | The installer/uninstaller (`install.py` — one idempotent convergence for install, upgrade, repair, rollback), config validation, profile rendering, release helper |
 | `bootstrap.sh` | The one-line first install (clones into `~/.hermes/superagent/src`, runs the installer) |

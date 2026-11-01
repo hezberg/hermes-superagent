@@ -1,3 +1,19 @@
+## 0.12.2 — 2026-11-01
+
+- **The suite's slash commands actually exist now: `/board` and
+  `/block`.** They were registered as `/tasks` and `/stop` — both
+  Hermes built-ins (`tasks` is an alias of the agents command,
+  `stop` kills background processes) — and Hermes silently skips
+  a plugin command whose name conflicts with a built-in
+  (hermes_cli/plugins.py: register_command rejects on
+  resolve_command() hit, warning only in logs). So `/tasks`
+  always showed Hermes' own agent view, never the board; a field
+  report caught it. Renamed to the conflict-free `/board` (board
+  summary) and `/block <task-id>`; registrations that come back
+  empty are now logged loudly by the plugin itself, and tests pin
+  both the new names and the never-register-builtins rule.
+  README/SETUP references swept.
+
 ## 0.12.1 — 2026-11-01
 
 - **README quickstart is the real two steps now** — bootstrap,
