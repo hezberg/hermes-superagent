@@ -12,11 +12,11 @@ Field failures encoded here:
      every model call went out with a placeholder key.
   2. Toolsets written under `agent.toolsets`, a key Hermes ignores —
      the Router silently got the full default toolset and no kanban.
-  3. Clash/mihomo fake-IP DNS: public names resolve into
-     198.18.0.0/15, Hermes' SSRF guard calls that "internal", and
-     every web fetch is blocked unless the profile allows private
-     URLs. Compounded by: profiles do not inherit the default
-     profile's security setting.
+  3. security.allow_private_urls does not inherit across profiles:
+     it must be rendered into every profile, or the profiles where
+     it is missing get their web fetches blocked by the SSRF guard
+     on machines whose DNS resolves public names into private
+     ranges. Doctor checks only what the config itself declares.
   4. Rendered configs hand-edited in a rich-text editor arrived with
      curly quotes, and every quoted value was silently wrong.
 
@@ -104,28 +104,41 @@ def check_worker_profile(profile_name, profile_cfg):
     return [_finding("ok", f"{profile_name} toolsets rendered ({', '.join(cli)}).")]
 
 
-def is_fake_ip(ip):
-    try:
-        return ipaddress.ip_address(ip) in ipaddress.ip_network("198.18.0.0/15")
-    except ValueError:
-        return False
+def check_private_urls(expected, profiles_allow_private):
+    """Consistency of ONE declared setting — nothing more.
 
+    Doctor judges the install against the operator's own config; it
+    does not probe the machine's DNS personality (an earlier version
+    resolved a third-party hostname and reported on fake-IP DNS —
+    that is one machine's proxy setup, not a suite health criterion,
+    and the operator called it out). So:
 
-def check_fake_ip(resolved_ips, profiles_allow_private):
-    """profiles_allow_private: {profile name: bool}."""
-    fake = [ip for ip in (resolved_ips or []) if is_fake_ip(ip)]
-    if not fake:
+    - config does not declare security.allow_private_urls -> the
+      suite has no opinion, no finding;
+    - declared true -> every profile must have it rendered;
+    - declared false -> no profile may have it rendered.
+    """
+    if expected is None:
         return []
-    lacking = [p for p, ok in (profiles_allow_private or {}).items() if not ok]
-    if lacking:
+    allow = profiles_allow_private or {}
+    if expected:
+        lacking = [p for p, ok in allow.items() if not ok]
+        if lacking:
+            return [_finding(
+                "error",
+                f"security.allow_private_urls is on in superagent.yaml, but these profiles do not have it rendered: {', '.join(lacking)}.",
+                "Re-run the installer (the setting is written into every profile; profiles do not inherit it from the default profile).",
+            )]
         return [_finding(
-            "error",
-            f"This machine's DNS is in fake-IP mode (public names resolve to 198.18-range addresses like {fake[0]}); "
-            f"Hermes' SSRF guard treats all web fetches as internal and blocks them. These profiles have not opted out: {', '.join(lacking)}.",
-            "Set security.allow_private_urls: true in superagent.yaml and reinstall (it is written into every profile; setting it on the default profile alone does not count - profiles do not inherit it).",
+            "ok", "security.allow_private_urls is on, and every profile has it rendered.")]
+    stray = [p for p, ok in allow.items() if ok]
+    if stray:
+        return [_finding(
+            "warn",
+            f"security.allow_private_urls is off in superagent.yaml, but these profiles still allow private URLs: {', '.join(stray)}.",
+            "Re-run the installer to re-render the profiles from the config.",
         )]
-    return [_finding(
-        "ok", "Fake-IP DNS detected, and every profile allows private URLs - web fetches will not be blocked by the SSRF guard.")]
+    return []
 
 
 def check_private_base_url(providers):

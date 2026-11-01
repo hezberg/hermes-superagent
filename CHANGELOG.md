@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.6 — 2026-11-01
+
+- **Doctor no longer judges the machine's DNS.** The fake-IP check
+  probed a third-party hostname's resolution and reported on the
+  machine's proxy setup as if it were suite health — that is one
+  operator's environment, not a general criterion (called out in
+  the field). Replaced with a config-consistency check: doctor
+  verifies `security.allow_private_urls` only when the config
+  itself declares it — declared on means every profile must have
+  it rendered, declared off means none may, undeclared means no
+  opinion. The live DNS probe is gone.
+
 ## 0.5.5 — 2026-11-01
 
 - **The installer no longer needs PyYAML at all.** 0.5.4's

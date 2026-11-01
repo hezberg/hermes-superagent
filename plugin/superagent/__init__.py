@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.5.5"
+PLUGIN_VERSION = "0.5.6"
 
 
 # --------------------------------------------------------------------------
@@ -340,8 +340,6 @@ def run_reminder_pass(tasks, events_by_task, stalled_ids, watchdog_cfg):
 
 
 def _doctor_findings():
-    import socket
-
     from . import doctor as doc
 
     cfg = load_suite_config()
@@ -406,15 +404,11 @@ def _doctor_findings():
     findings += doc.check_key_env(providers, env_present)
     findings += doc.check_private_base_url(providers)
 
-    resolved = []
-    try:
-        infos = socket.getaddrinfo(
-            "api-docs.deepseek.com", 443, proto=socket.IPPROTO_TCP
-        )
-        resolved = sorted({info[4][0] for info in infos})
-    except Exception:
-        resolved = []
-    findings += doc.check_fake_ip(resolved, allow_private)
+    security = cfg.get("security") or {}
+    expected_private = security.get("allow_private_urls")
+    if expected_private is not None:
+        expected_private = bool(expected_private)
+    findings += doc.check_private_urls(expected_private, allow_private)
 
     plugin_present = os.path.isdir(
         os.path.join(hermes_home(), "plugins", "superagent")

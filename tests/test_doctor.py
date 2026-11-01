@@ -56,26 +56,30 @@ class TestRouterToolsets(unittest.TestCase):
         self.assertEqual(levels(findings), ["ok"])
 
 
-class TestFakeIp(unittest.TestCase):
-    def test_range_boundaries(self):
-        self.assertTrue(doc.is_fake_ip("198.18.0.1"))
-        self.assertTrue(doc.is_fake_ip("198.19.255.255"))
-        self.assertFalse(doc.is_fake_ip("198.20.0.1"))
-        self.assertFalse(doc.is_fake_ip("8.8.8.8"))
-        self.assertFalse(doc.is_fake_ip("not-an-ip"))
+class TestPrivateUrls(unittest.TestCase):
+    def test_undeclared_setting_means_no_opinion(self):
+        self.assertEqual(doc.check_private_urls(None, {"a": False}), [])
+        self.assertEqual(doc.check_private_urls(None, {}), [])
 
-    def test_blocked_profiles_error_names_them(self):
-        findings = doc.check_fake_ip(
-            ["198.18.4.182"], {"sa-router": True, "sa-worker-research": False}
+    def test_declared_on_but_profile_missing_it_errors(self):
+        findings = doc.check_private_urls(
+            True, {"sa-router": True, "sa-worker-research": False}
         )
         self.assertEqual(levels(findings), ["error"])
         self.assertIn("sa-worker-research", findings[0]["text"])
 
-    def test_all_allowed_ok_and_no_fake_no_finding(self):
+    def test_declared_on_and_rendered_everywhere_ok(self):
         self.assertEqual(
-            levels(doc.check_fake_ip(["198.18.0.9"], {"a": True})), ["ok"]
+            levels(doc.check_private_urls(True, {"a": True})), ["ok"]
         )
-        self.assertEqual(doc.check_fake_ip(["1.1.1.1"], {"a": False}), [])
+
+    def test_declared_off_but_profile_allows_warns(self):
+        findings = doc.check_private_urls(False, {"a": True, "b": False})
+        self.assertEqual(levels(findings), ["warn"])
+        self.assertIn("a", findings[0]["text"])
+
+    def test_declared_off_and_consistent_is_silent(self):
+        self.assertEqual(doc.check_private_urls(False, {"a": False}), [])
 
 
 class TestMisc(unittest.TestCase):
