@@ -498,7 +498,7 @@ again, and uninstall leaves nothing behind.
   runs `hermes plugins enable superagent`; `doctor` checks the
   enablement state (missing list / not listed / disabled-wins) with
   the fix attached. ASSUMPTIONS item 3 records the mechanism.
-- **`hermes superagent recall <关键词>`** — search the journal by
+- **`hermes superagent recall <keyword>`** — search the journal by
   keyword and get matching past outcomes in prose. Global memory is
   only useful if it can be *recalled*, not just written.
 - **Doctor: install-drift checks.** Warns when the suite config was
