@@ -1,3 +1,14 @@
+## 0.10.3 — 2026-11-01
+
+- **Wizard: choosing a provider keeps the right to choose the
+  model.** 0.10.1 overshot: a provider whose entry names a model
+  settled both silently, so picking that provider's OTHER models
+  was impossible. Now the model prompt always follows a provider
+  choice, with the entry's model prefilled as the default —
+  Enter keeps it, typing selects any other model the provider
+  serves. (The original sin was the same prompt with a BLANK
+  default; the correct shape is a prefilled one.)
+
 ## 0.10.2 — 2026-11-01
 
 - **Wizard: a duplicate Feishu app is a hard stop on EVERY path.**

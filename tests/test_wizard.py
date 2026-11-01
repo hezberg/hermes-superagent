@@ -178,20 +178,27 @@ class TestWizardNamedProvider(WizardCase):
                 "    model: cn:deepseek-v4.1-flash\n"
                 "    api_key_env: WB_KEY\n")
 
-    def test_named_provider_with_model_asks_nothing_more(self):
-        # topology=1, router picks menu item 2 (workbuddy — its entry
-        # already names a model, so NO model question may follow;
-        # the next scripted answer belongs to the worker menu),
+    def test_named_provider_model_prefilled_but_editable(self):
+        # topology=1, router picks workbuddy (2); the model prompt
+        # follows with the entry's model as default: "" keeps it.
         # worker inherits, no chat entry.
-        rc, ui = self.run_wizard(["1", "2", "1", "1"])
+        rc, ui = self.run_wizard(["1", "2", "", "1", "1"])
         self.assertEqual(rc, 0, "\n".join(ui.output))
-        self.assertFalse(any(a.startswith("Model for")
-                             for a in ui.answers))
         cfg = sa._yaml_load(open(os.path.join(
             self.home, "superagent", "superagent.yaml")).read())
         self.assertEqual(cfg["router"]["provider"], "workbuddy")
         self.assertEqual(cfg["router"]["model"], "cn:deepseek-v4.1-flash")
         self.assertEqual(ui.answers, [])  # every answer consumed as scripted
+
+    def test_named_provider_other_model_wins(self):
+        # Same menu, but the operator types a DIFFERENT model than
+        # the provider entry's own — that choice must be honored.
+        rc, ui = self.run_wizard(["1", "2", "cn:another-model", "1", "1"])
+        self.assertEqual(rc, 0, "\n".join(ui.output))
+        cfg = sa._yaml_load(open(os.path.join(
+            self.home, "superagent", "superagent.yaml")).read())
+        self.assertEqual(cfg["router"]["provider"], "workbuddy")
+        self.assertEqual(cfg["router"]["model"], "cn:another-model")
 
 
 class TestStyle(unittest.TestCase):

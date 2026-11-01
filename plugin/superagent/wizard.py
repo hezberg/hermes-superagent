@@ -445,10 +445,11 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
     # -- 4. Per-role provider/model --------------------------------------
     # The menu offers real selections only: named providers and
     # custom providers (the default profile's own block is what
-    # "inherit" means — it is not a selectable name). A selection
-    # whose entry already names a model settles BOTH provider and
-    # model; the wizard asks for a model only when the entry has
-    # none.
+    # "inherit" means — it is not a selectable name). Choosing a
+    # provider does NOT nail the model: the model prompt follows
+    # with the provider entry's own model prefilled — Enter keeps
+    # it, typing replaces it with any other model that provider
+    # serves.
     menu = [item for item in hermes_provider_menu(default_cfg)
             if not item.get("default")]
     menu_labels = ["Inherit the default profile's model"] + [
@@ -459,17 +460,18 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
     roles += [(f"Worker {n}", WORKER_PRESETS[n]["profile"], n) for n in worker_names]
     selections = {}
     for label, profile, _kind in roles:
-        idx = ui.choose(f"{label} ({profile}) — model:", menu_labels, default=0)
+        idx = ui.choose(f"{label} ({profile}) — provider:", menu_labels, default=0)
         if idx == 0:
             selections[profile] = ("", "")
             continue
         item = menu[idx - 1]
         provider = item["select"]
         if item.get("model"):
-            selections[profile] = (provider, item["model"])
-            say(f"  -> {provider} / {item['model']} (as defined in Hermes)")
-            continue
-        model = ui.ask(f"Model for {profile} (blank = provider default)")
+            model = ui.ask(
+                f"Model for {profile} (Enter keeps it, or type another)",
+                item["model"])
+        else:
+            model = ui.ask(f"Model for {profile} (blank = provider default)")
         selections[profile] = (provider, model)
 
     # Key check for the selections themselves: a chosen provider
