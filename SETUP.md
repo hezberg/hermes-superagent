@@ -59,6 +59,12 @@ Ask in this order, one per message. Recommendations in brackets.
    without running it; `auto` also lets rule-matched candidates become
    real work. [observe — explicit requests from allowed senders work
    either way; only unasked work is held back.]
+6. **Reminder delivery.** The suite can proactively message the
+   operator when work blocks, stalls, or finishes unreviewed. Which
+   connected platform should those reminders go to? [Whichever chat
+   you actually read — e.g. Feishu. "Later" is a fine answer; the
+   ledger still records everything, and the target can be set any
+   time with `hermes cron edit <id> --deliver <platform>`.]
 
 Do not ask about values with a good default; list them in the plan:
 watchdog report-only with 30-minute stall threshold, one worker slot
@@ -78,11 +84,17 @@ operator step (entering keys). Ask for one confirmation.
    `python3 scripts/validate_config.py config/superagent.yaml` — fix
    every ERROR before continuing; warnings about empty fields mean an
    answer is still missing.
-2. **Operator step.** Send one message with the exact commands for the
-   operator to run in their own terminal to export the key(s) — the
-   variable names come from `api_key_env` in the config, e.g.
-   `export SUPERAGENT_MAIN_API_KEY=...`. Wait for their confirmation.
-   Never receive, print, or store the key yourself.
+2. **Operator step — the only one that must happen outside the
+   agent.** Send one message with the exact line(s) for the operator
+   to add to `~/.hermes/.env` in their own editor or terminal, one
+   per provider:
+   `<api_key_env 的变量名>=<key 本身>` (field-verified: the global
+   `.env` is read by every profile; per-profile files are not
+   needed). Never receive, print, or store the value yourself; ask
+   only for confirmation that the line exists. Then the gateways
+   need a restart to pick it up — if you are running inside a
+   gateway chat, warn the operator the conversation will drop and
+   resume, and make the restart your last step.
 3. Install: `./install.sh --config config/superagent.yaml`. A refusal
    names the collision or validation problem; fix that, not around it.
    After this first install, the effective config's home is
@@ -95,6 +107,14 @@ operator step (entering keys). Ask for one confirmation.
    present — and run `hermes superagent doctor`: it checks the whole
    install (keys, toolsets, fake-IP DNS, rendered configs) and reports
    in prose with fixes. Clear every ✗ before handing over.
+5. Reminder delivery: if the operator picked a platform in question
+   6, point the tick's cron job at it — `hermes cron list` to find
+   the job, then `hermes cron edit <id> --deliver <platform>`. If
+   they said "later", leave it and note the same command in the
+   hand-over.
+6. Smoke test: give the Router one small real task and watch its card
+   complete on the board before handing over. A setup that never ran
+   a task is not a finished setup.
 
 ## 5. Hand over
 
