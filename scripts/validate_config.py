@@ -71,10 +71,12 @@ def validate(cfg):
         prov = role.get("provider")
         if not prov and not role.get("model"):
             warn(f"{label}: no provider/model — will inherit the default profile's model")
-        elif prov not in providers:
-            err(f"{label}.provider references unknown provider {prov!r}")
-        if prov and not role.get("model"):
-            warn(f"{label}.model is empty — fill it in before installing")
+        elif prov and prov not in providers:
+            # A selection: names a provider in the user's Hermes
+            # config, resolved at install time. Only the installer
+            # can call it unknown (it errors there, with the menu).
+            warn(f"{label}.provider {prov!r} is a selection — it must exist in the "
+                 "default Hermes profile's config (checked at install)")
 
     check_role("router", cfg.get("router"))
 

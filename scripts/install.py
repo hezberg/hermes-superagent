@@ -75,7 +75,7 @@ def is_pristine(cfg):
             return False
     roles = [cfg.get("router") or {}] + list(cfg.get("workers") or [])
     for role in roles:
-        if isinstance(role, dict) and role.get("model"):
+        if isinstance(role, dict) and (role.get("model") or role.get("provider")):
             return False
     return True
 
@@ -403,7 +403,7 @@ def resolve_config(home, explicit, dry_run):
                     say("Replaced the empty template with the config given via --config.")
                     return suite_cfg, seeded, EXIT_OK
             say("Config not filled in yet: ~/.hermes/superagent/superagent.yaml has no "
-                "provider URL or models. Fill it in and re-run the same command.")
+                "provider or model selections. Fill it in and re-run the same command.")
             return None, None, EXIT_NEEDS_CONFIG
         if explicit and os.path.abspath(explicit) != os.path.abspath(suite_cfg):
             say("note: an active config already exists at ~/.hermes/superagent/superagent.yaml "
@@ -416,7 +416,7 @@ def resolve_config(home, explicit, dry_run):
             return None, None, EXIT_PREFLIGHT
         cfg = load_yaml(explicit)
         if is_pristine(cfg):
-            say("That --config is still the empty template - fill in providers and models first.")
+            say("That --config is still the empty template - select a provider or model first, or rely on your default Hermes profile.")
             return None, None, EXIT_NEEDS_CONFIG
         if not dry_run:
             os.makedirs(suite_dir, exist_ok=True)
@@ -497,20 +497,32 @@ def main(argv=None):
     if suite_cfg is None:
         return code
 
-    # ------------------------------------------------- inheritance
-    # Roles left model-less inherit the default profile's model
-    # block. The effective config is what gets validated, rendered,
-    # and key-synced; the file on disk stays the operator's override.
+    # ------------------------------------------------- resolution
+    # Roles SELECT providers/models that already exist in the
+    # default Hermes profile's config; the suite declares none of
+    # its own. The effective config is what gets validated,
+    # rendered, and key-synced; the file on disk stays the
+    # operator's selections.
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import inherit as inherit_mod
 
-    model_block = inherit_mod.default_model_block(home)
-    eff_cfg, inherited_roles = inherit_mod.apply_inheritance(cfg, model_block)
+    default_cfg = inherit_mod.default_config(home)
+    eff_cfg, res_notes, res_errors = inherit_mod.apply_resolution(cfg, default_cfg)
+    if res_errors:
+        say("Config resolution failed - these selections do not exist in your Hermes config:")
+        for err in res_errors:
+            say(f"ERROR: {err}")
+        return EXIT_FAIL
+    inherited_roles = [n["profile"] for n in res_notes if n["via"] == "inherited"]
     if inherited_roles:
+        model_block = inherit_mod.default_model_block(home)
         say("Inheriting the default profile's model for "
             + ", ".join(inherited_roles)
             + f" ({model_block.get('provider') or 'custom'} / "
             + f"{inherit_mod.block_model_name(model_block)}).")
+    for note in res_notes:
+        if note["via"] == "selection":
+            say(f"Selected for {note['profile']}: {note['detail']} (from your Hermes config).")
 
     # ------------------------------------------------------------ validate
     import validate_config as validate_mod

@@ -6,13 +6,9 @@
 # no terminal, no file, no web — so it physically cannot do the work
 # itself. Toolset selection lives under platform_toolsets.<platform>
 # (see docs/ASSUMPTIONS.md; `agent.toolsets` is NOT read by Hermes).
-model:
-  provider: "{{HERMES_PROVIDER}}"
-  default: "{{MODEL}}"
-  base_url: "{{BASE_URL}}"
-  api_key_env: "{{API_KEY_ENV}}"
-  reasoning_effort: "{{REASONING_EFFORT}}"
+{{MODEL_SECTION}}
 platform_toolsets:
   cli: [kanban, memory, skills]
   feishu: [kanban, memory, skills]
 {{SECURITY_BLOCK}}
+{{EXTRA_SECTIONS}}

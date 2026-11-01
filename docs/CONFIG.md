@@ -7,26 +7,30 @@ One file: `config/superagent.yaml` in this repo before install;
 python3 scripts/validate_config.py config/superagent.yaml
 ```
 
-Empty `base_url` / `model` fields are warnings, not errors — the plumbing
-can be checked before models are chosen.
+Empty `provider` / `model` fields mean "the default Hermes profile's
+model" — they are the normal case, not missing configuration.
 
-## providers
+## providers — there are none here, on purpose
 
-A map of named providers. Each role references one by name.
+superagent.yaml declares no providers, endpoints or keys. Providers
+and models live in Hermes (the default profile's `config.yaml`:
+its `model:` block, `providers:` mapping and `custom_providers:`
+list). Roles only SELECT among them by name — see `provider` /
+`model` below. `hermes superagent providers` lists what can be
+selected. A selection Hermes does not have is an install error
+that prints the menu.
 
-| Field | Meaning |
-|---|---|
-| `type` | `openai-compatible` or `anthropic` — both endpoint shapes are wired up |
-| `base_url` | Endpoint root, e.g. `https://api.deepseek.com`, `https://api.openai.com/v1`, `https://api.anthropic.com`, or your own gateway |
-| `api_key_env` | Name of the environment variable holding the key. **Keys never go in this file.** |
+(Legacy: a suite-owned `providers:` map — `type` /
+`base_url` / `api_key_env` per name — is still honored for roles
+that reference it, so pre-0.7 configs keep working.)
 
 ## router / workers
 
 | Field | Meaning |
 |---|---|
 | `profile` | Hermes profile name to create (must be unique) |
-| `provider` | Key into `providers` |
-| `model` | Model id at that provider — entirely your choice |
+| `provider` | Name of a provider in your Hermes config (see above); empty = the default profile's provider |
+| `model` | Model id at the selected provider; empty = that provider's own model, or the default profile's model when nothing is selected |
 | `toolsets` (workers) | The worker's work toolsets for its CLI platform selection (rendered into `platform_toolsets.cli`; the renderer adds `memory` + `skills`, and the Hermes dispatcher force-adds the kanban lifecycle tools to spawned task workers — neither needs listing) |
 | `max_concurrent` (workers) | Concurrent tasks per worker |
 

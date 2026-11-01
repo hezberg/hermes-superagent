@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.6.2"
+PLUGIN_VERSION = "0.7.0"
 
 
 # --------------------------------------------------------------------------
@@ -66,6 +66,103 @@ def load_suite_config():
             return _yaml_load(fh.read())
     except Exception:
         return {}
+
+
+def load_default_config():
+    """The default Hermes profile's config.yaml, or {}."""
+    try:
+        with open(os.path.join(hermes_home(), "config.yaml"), encoding="utf-8") as fh:
+            cfg = _yaml_load(fh.read())
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+
+def _entry_detail(entry):
+    bits = []
+    if (entry or {}).get("base_url"):
+        bits.append(str(entry["base_url"]))
+    model = (entry or {}).get("default") or (entry or {}).get("model")
+    if model:
+        bits.append(f"model {model}")
+    var = (entry or {}).get("api_key_env") or (entry or {}).get("key_env")
+    if var:
+        bits.append(f"key var {var}")
+    return ", ".join(bits)
+
+
+def hermes_provider_menu(default_cfg):
+    """What a role can select: the default profile's model plus every
+    named provider in its config. Names and non-secret facts only."""
+    items = []
+    block = (default_cfg or {}).get("model") or {}
+    if isinstance(block, dict) and (block.get("provider") or block.get("default")):
+        items.append({
+            "select": block.get("provider") or "custom",
+            "detail": "default profile model: "
+                      + str(block.get("default") or block.get("model") or "?")
+                      + (f", key var {block.get('api_key_env') or block.get('key_env')}"
+                         if (block.get("api_key_env") or block.get("key_env")) else ""),
+            "default": True,
+        })
+    providers = (default_cfg or {}).get("providers")
+    if isinstance(providers, dict):
+        for key, entry in providers.items():
+            if isinstance(entry, dict):
+                items.append({"select": entry.get("name") or key,
+                              "detail": _entry_detail(entry), "default": False})
+    custom = (default_cfg or {}).get("custom_providers")
+    if isinstance(custom, list):
+        for entry in custom:
+            if isinstance(entry, dict) and entry.get("name"):
+                items.append({"select": entry["name"],
+                              "detail": _entry_detail(entry), "default": False})
+    return items
+
+
+def resolved_role_key_vars(cfg, default_cfg):
+    """{profile: key variable name} for every role, resolved the way
+    the installer resolves selections: a legacy suite provider, a
+    named Hermes provider entry, or the default model block."""
+    block = (default_cfg or {}).get("model") or {}
+    block_var = block.get("api_key_env") or block.get("key_env") or ""
+    block_provider = str(block.get("provider") or "").lower()
+    entries = {}
+    providers = (default_cfg or {}).get("providers")
+    if isinstance(providers, dict):
+        for key, entry in providers.items():
+            if isinstance(entry, dict):
+                var = entry.get("api_key_env") or entry.get("key_env") or ""
+                for nm in (key, entry.get("name"), entry.get("provider_key")):
+                    if nm:
+                        entries[str(nm).lower().removeprefix("custom:")] = var
+    custom = (default_cfg or {}).get("custom_providers")
+    if isinstance(custom, list):
+        for entry in custom:
+            if isinstance(entry, dict) and entry.get("name"):
+                entries[str(entry["name"]).lower()] = \
+                    entry.get("api_key_env") or entry.get("key_env") or ""
+    legacy = cfg.get("providers") or {}
+    out = {}
+    roles = [cfg.get("router") or {}] + list(cfg.get("workers") or [])
+    for role in roles:
+        if not isinstance(role, dict) or not role.get("profile"):
+            continue
+        prov = str(role.get("provider") or "").strip()
+        var = ""
+        if prov in legacy:
+            var = (legacy[prov] or {}).get("api_key_env") or ""
+        elif prov:
+            norm = prov.lower().removeprefix("custom:")
+            if norm in entries:
+                var = entries[norm]
+            elif prov.lower() == block_provider:
+                var = block_var
+        else:
+            var = block_var
+        if var:
+            out[role["profile"]] = var
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -395,13 +492,22 @@ def _doctor_findings():
                         present_names.add(line.split("=", 1)[0].strip())
         except OSError:
             pass
-    providers = cfg.get("providers") or {}
-    env_present = {}
-    for p in providers.values():
-        var = (p or {}).get("api_key_env")
+    # Key variables follow each role's selection (a named Hermes
+    # provider, the default model block, or a legacy suite provider)
+    # — the suite declares none of its own.
+    default_cfg = load_default_config()
+    role_vars = resolved_role_key_vars(cfg, default_cfg)
+    providers_view = {}
+    roles_all = [cfg.get("router") or {}] + list(cfg.get("workers") or [])
+    for role in roles_all:
+        if not isinstance(role, dict) or not role.get("profile"):
+            continue
+        var = role_vars.get(role["profile"])
         if var:
-            env_present[var] = var in present_names
-    findings += doc.check_key_env(providers, env_present)
+            label = str(role.get("provider") or "").strip() or "default profile"
+            providers_view[label] = {"api_key_env": var}
+    env_present = {v: v in present_names for v in role_vars.values()}
+    findings += doc.check_key_env(providers_view, env_present)
     # Convergence: a profile copy that differs from the global .env
     # is a stale key still being sent. Compare values here; doctor
     # receives only names of the offenders.
@@ -409,18 +515,18 @@ def _doctor_findings():
 
     global_env = _read_env(os.path.join(hermes_home(), ".env"))
     stale = {}
-    for p in providers.values():
-        var = (p or {}).get("api_key_env")
-        if not var or var not in global_env:
+    for profile, var in role_vars.items():
+        if var not in global_env:
             continue
-        for n in names:
-            if not n:
-                continue
-            profile_env = _read_env(os.path.join(hermes_home(), "profiles", n, ".env"))
-            if var in profile_env and profile_env[var] != global_env[var]:
-                stale.setdefault(n, []).append(var)
+        profile_env = _read_env(os.path.join(hermes_home(), "profiles", profile, ".env"))
+        if var in profile_env and profile_env[var] != global_env[var]:
+            stale.setdefault(profile, []).append(var)
     findings += doc.check_key_convergence(stale)
-    findings += doc.check_private_base_url(providers)
+    rendered_providers = {
+        n: {"base_url": ((c.get("model") or {}).get("base_url") or "")}
+        for n, c in profile_cfgs.items() if c
+    }
+    findings += doc.check_private_base_url(rendered_providers)
 
     security = cfg.get("security") or {}
     expected_private = security.get("allow_private_urls")
@@ -592,6 +698,7 @@ def _cli_setup(parser):
     recall = sub.add_parser("recall", help="Search past outcomes in the journal")
     recall.add_argument("query", nargs="*", help="Keyword(s) to search for")
     sub.add_parser("reminders", help="Show the reminder ledger for unclosed work")
+    sub.add_parser("providers", help="List the providers/models in your Hermes config that roles can select")
     sub.add_parser("upgrade", help="Upgrade the suite in place (pulls its source, re-runs the installer)")
     set_model = sub.add_parser(
         "set-model", help="Set one profile's model in superagent.yaml and apply it now")
@@ -631,6 +738,20 @@ def _cli_handler(args):
             print(result.get("message") or "The change was saved but could not be applied.")
             return 1
         print(f"{args.profile}: model set to {model or '(inherit the default profile)'} and applied.")
+        return 0
+    if sub == "providers":
+        menu = hermes_provider_menu(load_default_config())
+        if not menu:
+            print("No providers or models found in your default Hermes config "
+                  "(~/.hermes/config.yaml). Add one in Hermes first "
+                  "(Settings -> Providers, or hermes setup).")
+            return 0
+        print("Providers in your Hermes config — select by name in superagent.yaml "
+              "(provider: <name>), or leave provider/model empty for the default:")
+        for item in menu:
+            tag = " (default)" if item.get("default") else ""
+            detail = f" — {item['detail']}" if item.get("detail") else ""
+            print(f"  {item['select']}{tag}{detail}")
         return 0
     if sub == "doctor":
         from .doctor import summarize

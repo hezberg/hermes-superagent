@@ -88,8 +88,9 @@ operator step (entering keys). Ask for one confirmation.
    the same run**: every role left model-less inherits the default
    profile's model block verbatim. Only when there is nothing to
    inherit does the installer stop and ask for values.
-2. Optionally write overrides into that file (a different model for
-   a role, extra providers). Validate:
+2. Optionally write selections into that file (a different provider
+   or model for a role — names from your Hermes config only;
+   `hermes superagent providers` lists them). Validate:
    `python3 scripts/validate_config.py ~/.hermes/superagent/superagent.yaml`
    — fix every ERROR before continuing. (A filled staging file may
    still be passed once via `--config` to seed the suite config;

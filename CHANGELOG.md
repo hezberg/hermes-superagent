@@ -1,3 +1,25 @@
+## 0.7.0 — 2026-11-01
+
+- **The suite owns no providers or models at all.** Following the
+  operator's doctrine to its conclusion: superagent.yaml is now
+  selections only. A role's `provider`/`model` names resolve
+  against the default Hermes profile's own config — its `model:`
+  block, `providers:` mapping and `custom_providers:` list — and a
+  selected named endpoint is rendered into the profile the way
+  Hermes' own profile seeding does it (model block pointing at
+  `custom:<name>`, entry copied verbatim alongside). Selecting
+  something Hermes does not have fails the install with the menu
+  of what exists. New providers are added in Hermes (Settings ->
+  Providers / hermes setup) and become selectable immediately.
+- **`hermes superagent providers`** lists what can be selected.
+- Verbatim model blocks are now rendered whole (previously three
+  fields were picked out and the rest silently dropped), and the
+  default block's referenced named entry travels with inherited
+  roles too.
+- Doctor derives key variables from each role's resolved
+  selection; the template ships without a `providers:` section.
+  Pre-0.7 suite-owned `providers:` keep working unchanged (legacy).
+
 ## 0.6.2 — 2026-11-01
 
 - **Keys have a single source of truth: ~/.hermes/.env.** The

@@ -103,3 +103,16 @@ place when the suite meets a real installation:
     (`kanban.auto_subscribe_on_create`, default on) — a bare CLI
     session has no deliverable destination, which is why completion
     notifications require the chat entry.
+11. **Providers and models live in Hermes, never in the suite
+    (operator's doctrine, 2026-11-01).** superagent.yaml holds only
+    per-role SELECTIONS. Resolution sources in the default profile's
+    config.yaml: the `model:` block, the `providers:` mapping, and
+    the `custom_providers:` list — the same registry Hermes' own
+    profile seeding reads (hermes_cli/profile_model_seed.py in
+    NousResearch/hermes-agent). A selected named endpoint is copied
+    into the rendered profile (model block pointing at
+    `custom:<name>` plus the entry itself), because a bare reference
+    is "Unknown provider" on the first turn. A selection that exists
+    in none of these is an install error listing the menu. The
+    pre-0.7 suite-owned `providers:` section keeps working as a
+    legacy override.

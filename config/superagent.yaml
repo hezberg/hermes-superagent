@@ -1,35 +1,32 @@
 # hermes-superagent — main configuration
 # ---------------------------------------------------------------------------
-# This is the ONLY file you need to edit — and you may not need to edit
-# it at all. INHERITANCE: any role whose `model` is left empty inherits
-# your default Hermes profile's model setup (provider, model, base_url,
-# key variable) at install time. If your default profile already talks
-# to a model, install just works; fill values in only to give a role a
-# different model than your default.
+# This file contains NO providers, NO endpoints and NO keys — by
+# design. Providers and models live in Hermes, where you already
+# configured them; here you only SELECT, per role, which of them to
+# use:
 #
-# The installer renders Hermes profile configs from this file. API keys
-# are NEVER stored here: each provider names an environment variable
-# (api_key_env). Put the actual key in ~/.hermes/.env — the installer
-# syncs it into each profile's .env automatically.
+#   provider: ""   model: ""   -> the default Hermes profile's model
+#   model: "name"              -> the default provider, another model
+#   provider: "name"           -> a provider that exists in your
+#                                 Hermes config (its `providers:` /
+#                                 `custom_providers:` entries, or the
+#                                 default model block)
 #
-# Provider types wired up out of the box:
-#   openai-compatible — any endpoint speaking the OpenAI API shape
-#                       (OpenAI, DeepSeek, OpenRouter, vLLM, Ollama, ...)
-#   anthropic         — any endpoint speaking the Anthropic API shape
-#                       (Anthropic, or a compatible gateway)
-# Which model each role uses is entirely your choice: fill in `model`.
+# Run `hermes superagent providers` to see what you can select.
+# Selecting something Hermes does not have is an install error that
+# lists the menu — the suite never invents a provider. To use a new
+# provider, add it in Hermes first (Settings -> Providers, or
+# hermes setup); it becomes selectable here immediately.
+#
+# Keys likewise stay in ~/.hermes/.env, the single source of truth:
+# the suite reads the key variable each selected provider declares
+# and keeps the profiles' copies converged onto it automatically.
+#
+# (Legacy: a `providers:` section of your own still works — roles
+# naming one render from it as before. New configs should not add
+# one; selections cover everything it did.)
 
 version: 1
-
-providers:
-  main:
-    type: openai-compatible
-    base_url: "" # e.g. https://api.deepseek.com  |  https://api.openai.com/v1
-    api_key_env: SUPERAGENT_MAIN_API_KEY
-  # alt:
-  #   type: anthropic
-  #   base_url: ""        # e.g. https://api.anthropic.com
-  #   api_key_env: SUPERAGENT_ALT_API_KEY
 
 # The Router is a dedicated Hermes profile. It receives tasks, decomposes
 # them onto the Kanban board and reports back. It is intentionally given
@@ -37,7 +34,7 @@ providers:
 # itself — dispatching is its only job.
 router:
   profile: sa-router
-  provider: main
+  provider: "" # empty = the default Hermes profile's model
   model: "" # a fast, cheap model fits: routing is a judgement call, not a marathon
   reasoning_effort: "" # optional; leave empty to use the provider default
 
@@ -49,7 +46,7 @@ workers:
   - name: general
     profile: sa-worker-general
     role: general # everyday tasks: shell, files, web
-    provider: main
+    provider: ""
     model: "" # your strongest general model
     reasoning_effort: ""
     toolsets: [terminal, file, web]
@@ -57,7 +54,7 @@ workers:
   - name: research
     profile: sa-worker-research
     role: research # reading, synthesis, long-form reporting
-    provider: main
+    provider: ""
     model: ""
     reasoning_effort: ""
     toolsets: [web, file]
@@ -65,7 +62,7 @@ workers:
   - name: deep
     profile: sa-worker-deep
     role: deep # hard reasoning: debugging, design, review
-    provider: main
+    provider: ""
     model: "" # a reasoning model fits here, if you have one
     reasoning_effort: "" # e.g. high — deep work is where effort pays
     toolsets: [terminal, file, web]

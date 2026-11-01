@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import subprocess
@@ -373,3 +374,65 @@ class TestKeyRotation(InstallerCase):
         digest = state["synced_keys"]["sa-router"]["SUPERAGENT_MAIN_API_KEY"]
         self.assertEqual(len(digest), 64)
         self.assertNotIn(self.profile_key("sa-router"), raw)
+
+
+class TestSelectionInstall(InstallerCase):
+    """The 0.7 doctrine end-to-end: superagent.yaml holds ONLY
+    selections; providers/models come from the default Hermes
+    config, named entries are copied into the rendered profiles
+    (Hermes' own seeding rule), and keys converge from the global
+    .env using the variable the ENTRY declares."""
+
+    def write_default_config(self):
+        with open(os.path.join(self.home, "config.yaml"), "w") as fh:
+            yaml.safe_dump({
+                "model": {"provider": "custom", "default": "base-model",
+                          "base_url": "http://100.64.0.1:3001/v1",
+                          "api_key_env": "SUPERAGENT_MAIN_API_KEY"},
+                "custom_providers": [
+                    {"name": "lab", "base_url": "http://127.0.0.1:3001/v1",
+                     "key_env": "LAB_KEY"},
+                ],
+            }, fh)
+        with open(os.path.join(self.home, ".env"), "a") as fh:
+            fh.write("LAB_KEY=sk-lab-value\n")
+
+    def selection_cfg(self):
+        cfg = copy.deepcopy(FILLED)
+        cfg.pop("providers", None)
+        cfg["router"].update({"provider": "", "model": ""})
+        for w in cfg["workers"]:
+            w.update({"provider": "", "model": ""})
+        deep = [w for w in cfg["workers"] if w["profile"] == "sa-worker-research"][0]
+        deep.update({"provider": "lab", "model": "lab-model"})
+        return cfg
+
+    def test_selection_install_renders_entry_and_syncs_its_key(self):
+        self.write_default_config()
+        self.write_suite_config(self.selection_cfg())
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        deep_dir = os.path.join(self.home, "profiles", "sa-worker-research")
+        with open(os.path.join(deep_dir, "config.yaml")) as fh:
+            rendered = yaml.safe_load(fh)
+        self.assertEqual(rendered["model"]["provider"], "custom:lab")
+        self.assertEqual(rendered["model"]["default"], "lab-model")
+        self.assertEqual(rendered["custom_providers"][0]["name"], "lab")
+        with open(os.path.join(deep_dir, ".env")) as fh:
+            self.assertIn("LAB_KEY=sk-lab-value", fh.read())
+        # the router inherited the default block as before
+        router_dir = os.path.join(self.home, "profiles", "sa-router")
+        with open(os.path.join(router_dir, "config.yaml")) as fh:
+            router_cfg = yaml.safe_load(fh)
+        self.assertEqual(router_cfg["model"]["default"], "base-model")
+
+    def test_unknown_selection_fails_with_the_menu(self):
+        self.write_default_config()
+        cfg = self.selection_cfg()
+        deep = [w for w in cfg["workers"] if w["profile"] == "sa-worker-research"][0]
+        deep.update({"provider": "nope"})
+        self.write_suite_config(cfg)
+        result = self.run_install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("custom:lab", result.stdout)
+        self.assertIn("not in your Hermes config", result.stdout)

@@ -44,14 +44,18 @@ def provider_block(provider_cfg):
     """Return the dict of Hermes config values for one provider."""
     provider_cfg = provider_cfg or {}
     if provider_cfg.get("type") == "__verbatim__":
-        # Inherited from the default profile: copy its own values —
-        # Hermes knows provider types this abstraction does not.
+        # Resolved against the default profile's own config: the
+        # model block is emitted whole (Hermes owns its shape — the
+        # old field-picking dropped keys it did not know), and any
+        # named-endpoint sections travel with the profile.
         block = provider_cfg.get("model_block") or {}
         return {
             "HERMES_PROVIDER": block.get("provider") or "custom",
             "BASE_URL": block.get("base_url") or "",
             "API_KEY_ENV": block.get("api_key_env") or block.get("key_env") or "",
             "PROVIDER_TYPE": "__verbatim__",
+            "MODEL_BLOCK": block,
+            "SECTIONS": provider_cfg.get("sections") or {},
         }
     ptype = provider_cfg.get("type")
     return {
@@ -59,7 +63,47 @@ def provider_block(provider_cfg):
         "BASE_URL": provider_cfg.get("base_url") or "",
         "API_KEY_ENV": provider_cfg.get("api_key_env") or "",
         "PROVIDER_TYPE": ptype or "",
+        "MODEL_BLOCK": None,
+        "SECTIONS": {},
     }
+
+
+def model_section(values, role):
+    """The profile's `model:` section as YAML text.
+
+    Verbatim resolutions emit the resolved block whole, with the
+    role's reasoning effort merged in; legacy suite providers keep
+    the fixed-shape block the templates have always produced.
+    """
+    import inherit
+
+    block = values.get("MODEL_BLOCK")
+    if block is not None:
+        merged = dict(block)
+        effort = role.get("reasoning_effort")
+        if effort and "reasoning_effort" not in merged:
+            merged["reasoning_effort"] = effort
+        text = inherit.dump_simple_yaml({"model": merged})
+        return text.rstrip("\n")
+    lines = [
+        "model:",
+        f'  provider: "{values["HERMES_PROVIDER"]}"',
+        f'  default: "{role.get("model") or ""}"',
+        f'  base_url: "{values["BASE_URL"]}"',
+        f'  api_key_env: "{values["API_KEY_ENV"]}"',
+        f'  reasoning_effort: "{role.get("reasoning_effort") or ""}"',
+    ]
+    return "\n".join(lines)
+
+
+def extra_sections(values):
+    """Top-level sections a resolution carries (named endpoints)."""
+    sections = values.get("SECTIONS") or {}
+    if not sections:
+        return ""
+    import inherit
+
+    return "\n" + inherit.dump_simple_yaml(sections).rstrip("\n")
 
 
 def render_template(text, values):
@@ -128,7 +172,8 @@ def render_all(cfg, templates_dir, out_dir):
         values.update(
             {
                 "PROFILE_NAME": profile,
-                "MODEL": role.get("model") or "",
+                "MODEL_SECTION": model_section(values, role),
+                "EXTRA_SECTIONS": extra_sections(values),
                 "REASONING_EFFORT": role.get("reasoning_effort") or "",
                 "ROLE": role.get("role", ""),
                 "TOOLSETS": toolsets_yaml(
