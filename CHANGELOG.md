@@ -1,3 +1,25 @@
+## 0.10.0 — 2026-11-01
+
+- **Interactive setup wizard** (`hermes superagent setup`, or
+  `install.py --wizard`): the guided front door the installer
+  always lacked. Preflight refuses to proceed until Hermes itself
+  is ready — no default model means "run `hermes setup` first",
+  and a default model whose key variable has no value is a hard
+  stop (that combination passes naive checks and fails only at
+  the first real request). Then, in order: worker topology (one
+  worker / all three / pick), a provider+model choice per role
+  from the Hermes menu, an optional Feishu entry — paste a NEW
+  dedicated app's App ID + Secret (the ID is checked against every
+  profile: a duplicate is a hard stop explaining that one app
+  serves one profile; or bind through Hermes' own per-profile
+  setup, QR included) — credentials written to the router
+  profile's .env BEFORE install so postflight passes in one run.
+  Finishes with `hermes kanban init`, reminder-delivery setup,
+  a doctor verdict, and an optional gateway restart. Re-running
+  the wizard reconfigures in place, with current choices as
+  defaults. The whole flow is covered by scripted-input tests,
+  including the duplicate-App-ID stop.
+
 ## 0.9.0 — 2026-11-01
 
 The native-mechanisms release: a source-level survey of Hermes

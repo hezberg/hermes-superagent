@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.9.0.** The dispatch chain is verified end-to-end on a
+> **Status: v0.10.0.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). On top of the v0.1 skeleton (layout,
 > configuration system, plugin registration, profile rendering,
@@ -37,6 +37,25 @@ durable handoff between them.
 
 Requirements: Hermes (latest) already installed and run at least once,
 Python 3 with PyYAML (ships with Hermes). Linux (Ubuntu 24.04) and macOS.
+
+### Guided: the setup wizard
+
+After the one-line install below, run:
+
+```bash
+hermes superagent setup
+```
+
+The wizard refuses to start until your default Hermes profile has a
+model (it sends you to `hermes setup` first — the suite builds on
+Hermes' own configuration, never replaces it), then walks you
+through: worker topology (one worker, or specialists too), a
+provider/model choice per role, and an optional Feishu entry — paste
+a new dedicated app's credentials (it checks the App ID is not
+already used by another profile; one app serves one profile) or bind
+through Hermes' own setup. It finishes with kanban ready, reminder
+delivery set, and a doctor verdict. Re-running it reconfigures in
+place.
 
 ### Recommended: one line, nothing left in your home directory
 

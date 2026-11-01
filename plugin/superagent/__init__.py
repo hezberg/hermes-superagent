@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.9.0"
+PLUGIN_VERSION = "0.10.0"
 
 
 # --------------------------------------------------------------------------
@@ -712,6 +712,7 @@ def _cli_setup(parser):
     recall.add_argument("query", nargs="*", help="Keyword(s) to search for")
     sub.add_parser("reminders", help="Show the reminder ledger for unclosed work")
     sub.add_parser("providers", help="List the providers/models in your Hermes config that roles can select")
+    sub.add_parser("setup", help="Interactive setup wizard: topology, per-role models, Feishu entry, verified install")
     sub.add_parser("upgrade", help="Upgrade the suite in place (pulls its source, re-runs the installer)")
     set_model = sub.add_parser(
         "set-model", help="Set one profile's model in superagent.yaml and apply it now")
@@ -721,6 +722,14 @@ def _cli_setup(parser):
 
 def _cli_handler(args):
     sub = getattr(args, "subcommand", None) or "status"
+    if sub == "setup":
+        from .wizard import run_wizard
+
+        src = os.path.join(hermes_home(), "superagent", "src")
+        if not os.path.isfile(os.path.join(src, "scripts", "install.py")):
+            src = os.path.abspath(os.path.join(
+                os.path.dirname(__file__), "..", ".."))
+        return run_wizard(hermes_home(), src)
     if sub not in ("upgrade", "set-model"):
         # A hand-edited config applies itself on the next command;
         # nobody should have to remember a separate apply step.

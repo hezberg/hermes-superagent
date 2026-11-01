@@ -149,6 +149,56 @@ def maybe_reconcile(home, suite_dir, interactive=False, runner=None, role_vars=N
     }
 
 
+def _set_role_field(suite_dir, profile, field, value):
+    """Rewrite (or insert) one field inside the role block whose
+    `profile:` line matches, as a text edit. Returns True when the
+    profile was found."""
+
+    path = os.path.join(suite_dir, "superagent.yaml")
+    if not os.path.isfile(path):
+        return False
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("\n")
+    target = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("profile:"):
+            found = stripped.split(":", 1)[1].strip().strip('"').strip("'")
+            if found == profile:
+                target = i
+                break
+    if target is None:
+        return False
+    indent = len(lines[target]) - len(lines[target].lstrip(" "))
+    pad = " " * indent
+    new_line = f'{pad}{field}: "{value}"'
+    for j in range(target + 1, len(lines)):
+        line = lines[j]
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        ind = len(line) - len(line.lstrip(" "))
+        if ind < indent or (ind == indent and line.strip().startswith("- ")):
+            break
+        if ind == indent and line.strip().startswith(f"{field}:"):
+            lines[j] = new_line
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(lines))
+            return True
+    lines.insert(target + 1, new_line)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    return True
+
+
+def set_role_selection(suite_dir, profile, provider, model):
+    """Set one role's provider AND model (the wizard's per-role
+    choice). Empty strings mean: provider/model not selected —
+    the role inherits the default profile's model."""
+    ok_provider = _set_role_field(suite_dir, profile, "provider", provider)
+    ok_model = _set_role_field(suite_dir, profile, "model", model)
+    return ok_provider and ok_model
+
+
 def set_role_model(suite_dir, profile, model):
     """Set one role's model in superagent.yaml, as a text edit.
 

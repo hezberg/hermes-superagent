@@ -525,12 +525,25 @@ def main(argv=None):
     parser.add_argument("--config", default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--rollback", action="store_true")
+    parser.add_argument("--wizard", action="store_true",
+                        help="Run the interactive setup wizard instead of a bare install")
     parser.add_argument("--home", default=None,
                         help="Hermes home (default: $HERMES_HOME or ~/.hermes)")
     args = parser.parse_args(argv)
 
     home = args.home or os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
     version = repo_version()
+
+    if args.wizard:
+        sys.path.insert(0, os.path.join(REPO, "plugin"))
+        os.environ["HERMES_HOME"] = home
+        try:
+            from superagent.wizard import run_wizard
+
+            return run_wizard(home, REPO)
+        except ImportError as exc:
+            say(f"ERROR: the setup wizard could not load ({exc}).")
+            return EXIT_FAIL
 
     if args.rollback:
         return do_rollback(home)
