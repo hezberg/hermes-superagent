@@ -1,3 +1,16 @@
+## 0.7.2 — 2026-11-01
+
+- **Missing-key output diagnoses instead of asserting.** "Put the
+  key in .env" is a false instruction when the operator already
+  did and the line is empty or malformed — and the summary still
+  cheerfully said "give the Router a task". Now the installer
+  states exactly what it found for that variable (no such line /
+  line present but value empty / a similar name exists / no '='),
+  and the finish line is replaced with the correct sequence while
+  any key is missing. .env parsing additionally normalizes BOM,
+  zero-width characters and full-width '＝' (an IME slip that
+  previously read as "missing").
+
 ## 0.7.1 — 2026-11-01
 
 - **The missing-key path no longer asks for a re-run** (field

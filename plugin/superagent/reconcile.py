@@ -53,7 +53,8 @@ def _read_env(path):
     try:
         with open(path, encoding="utf-8") as fh:
             for line in fh:
-                line = line.strip()
+                line = line.strip().replace("\ufeff", "").replace("\u200b", "") \
+                    .replace("\uff1d", "=")
                 if line.startswith("export "):
                     line = line[len("export "):].lstrip()
                 if line and not line.startswith("#") and "=" in line:

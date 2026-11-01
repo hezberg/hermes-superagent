@@ -87,12 +87,20 @@ def _inheritance_available(home):
     return inherit_mod.inheritance_available(home)
 
 
+def _clean_env_line(line):
+    """Normalize one raw .env line for parsing: BOM / zero-width
+    characters and a full-width equals sign (a classic IME slip)
+    must not make a present key read as missing."""
+    return (line.replace("\ufeff", "").replace("\u200b", "")
+            .replace("\uff1d", "="))
+
+
 def _read_env_file(path):
     values = {}
     try:
         with open(path, encoding="utf-8") as fh:
             for line in fh:
-                line = line.strip()
+                line = _clean_env_line(line.strip())
                 if line.startswith("export "):
                     line = line[len("export "):].lstrip()
                 if line and not line.startswith("#") and "=" in line:
@@ -105,6 +113,41 @@ def _read_env_file(path):
     except OSError:
         pass
     return values
+
+
+def key_diagnosis(home, var):
+    """Why a key variable reads as missing, in one sentence.
+
+    The installer must diagnose, not assert: "put the key in .env"
+    is a false instruction when the operator already did and the
+    line is empty, malformed, or in another file. Names and shapes
+    only — never the value.
+    """
+    path = os.path.join(home, ".env")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            raw_lines = fh.read().splitlines()
+    except OSError:
+        return f"~/.hermes/.env does not exist yet — create it with one line: {var}=<your key>"
+    mentions = [ln for ln in raw_lines if var in ln and not ln.strip().startswith("#")]
+    if not mentions:
+        similar = [ln.split("=")[0].strip() for ln in raw_lines
+                   if "=" in ln and var.split("_")[0].lower()
+                   in ln.split("=")[0].strip().lower()]
+        hint = f" (a similar name exists: {similar[0]} — typo?)" if similar else ""
+        return f"no line for {var} exists in ~/.hermes/.env{hint} — add one line: {var}=<your key>"
+    line = _clean_env_line(mentions[-1].strip())
+    body = line[len("export "):].lstrip() if line.startswith("export ") else line
+    if "=" not in body:
+        return f"a line mentions {var} in ~/.hermes/.env but has no '=' and no value — make it {var}=<your key>"
+    name, value = body.split("=", 1)
+    if name.strip() != var:
+        return (f"~/.hermes/.env has a line named '{name.strip()}' — close to, but not, "
+                f"{var}; rename it to {var}")
+    if not value.strip():
+        return (f"{var} IS in ~/.hermes/.env but its value is empty — the line has "
+                "nothing after '='. Put the key there; everything else is automatic.")
+    return f"{var} is present in ~/.hermes/.env (the parser still could not use it — check the line's shape)"
 
 
 def _value_sha(value):
@@ -762,11 +805,15 @@ def main(argv=None):
         next_steps.append("Point the reminder cron at a delivery platform: find it in "
                             "hermes cron list, then hermes cron edit <id> --deliver feishu")
     for var in missing_key_vars:
-        next_steps.append(f"Put {var} in ~/.hermes/.env — that is the only step; "
-                            "it syncs into every profile automatically, no re-run needed.")
+        next_steps.append(key_diagnosis(home, var))
     for step in next_steps:
         say(f"Next step: {step}")
-    say("Finish with: hermes gateway restart - then give the Router a task.")
+    if missing_key_vars:
+        say("The suite is installed, but the Router cannot call a model until the "
+            "key above is in place. Once it is, everything else is automatic — "
+            "then: hermes gateway restart, and hermes --profile sa-router.")
+    else:
+        say("Finish with: hermes gateway restart - then give the Router a task.")
     if hard_errors:
         say("")
         say("WARNING: postflight checks found hard problems; the install does not count as complete:")

@@ -447,10 +447,28 @@ class TestEnvFormats(InstallerCase):
         with open(path) as fh:
             self.assertIn("SUPERAGENT_MAIN_API_KEY=sk-quoted-value", fh.read())
 
-    def test_missing_key_message_never_asks_for_a_rerun(self):
+    def test_missing_key_message_diagnoses_and_never_asks_for_a_rerun(self):
         with open(os.path.join(self.home, ".env"), "w") as fh:
             fh.write("# no keys here\n")
         self.write_suite_config()
         result = self.run_install()
-        self.assertIn("Put SUPERAGENT_MAIN_API_KEY in ~/.hermes/.env", result.stdout)
+        self.assertIn("no line for SUPERAGENT_MAIN_API_KEY exists", result.stdout)
         self.assertNotIn("then re-run", result.stdout)
+        # and it does not tell the operator to go use the Router yet
+        self.assertIn("cannot call a model until", result.stdout)
+        self.assertNotIn("give the Router a task", result.stdout)
+
+    def test_empty_value_line_is_diagnosed_as_empty(self):
+        with open(os.path.join(self.home, ".env"), "w") as fh:
+            fh.write("SUPERAGENT_MAIN_API_KEY=\n")
+        self.write_suite_config()
+        result = self.run_install()
+        self.assertIn("its value is empty", result.stdout)
+
+    def test_fullwidth_equals_key_is_found(self):
+        with open(os.path.join(self.home, ".env"), "w", encoding="utf-8") as fh:
+            fh.write("SUPERAGENT_MAIN_API_KEY＝sk-fullwidth\n")
+        self.install_filled()
+        path = os.path.join(self.home, "profiles", "sa-router", ".env")
+        with open(path) as fh:
+            self.assertIn("SUPERAGENT_MAIN_API_KEY=sk-fullwidth", fh.read())
