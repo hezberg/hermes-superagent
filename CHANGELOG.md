@@ -1,7 +1,7 @@
 ## 0.8.0 — 2026-11-01
 
 - **One worker by default.** The general/research/deep trio was a
-  template铺设 choice, not an architecture (the three worker
+  template default, not an architecture (the three worker
   templates were byte-identical; the roles differed only in config
   values) — yet every default install paid for three profiles in
   rendering, key sync and failure surface. The shipped template
