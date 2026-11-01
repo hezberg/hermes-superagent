@@ -106,10 +106,14 @@ the work itself. Big jobs become linked parent/child cards, and
 every card carries its goal and completion contract with it.
 
 **Watch progress.**
-- `/tasks` in a suite chat: the live board — what's running,
-  what's blocked, what just finished.
-- `hermes superagent status` in the terminal: profiles, board,
-  journal at a glance.
+- The board itself, in the terminal: `hermes kanban list` —
+  every card, its status and its assignee (Hermes' own board
+  CLI; `hermes kanban` alone shows the other board verbs).
+- The same board in a browser: `hermes dashboard` starts Hermes'
+  web dashboard — the kanban board is one of its views, and the
+  easiest way to read a busy board at a glance.
+- `hermes superagent status`: the suite's own summary — profiles,
+  board counts, recent journal.
 - From Feishu there is nothing to poll: a card created from chat
   pushes its result back into the same conversation when it
   finishes. Cards dispatched from the CLI are covered by the
