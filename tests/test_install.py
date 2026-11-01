@@ -202,6 +202,41 @@ class TestConverge(InstallerCase):
         self.assertEqual(state["version"], VERSION)
 
 
+class TestProfilesAreLivingDirs(InstallerCase):
+    """Field failure, 2026-11-01: profile convergence replaced the
+    whole directory tree, deleting each profile's .env (with the API
+    key) on every config change. The profile then failed every model
+    request ('request_failed') while the global .env masked the
+    loss. Profiles must converge per-file, never wholesale."""
+
+    def test_env_and_sessions_survive_a_config_change_reinstall(self):
+        self.install_filled()
+        router_dir = os.path.join(self.home, "profiles", "sa-router")
+        env_path = os.path.join(router_dir, ".env")
+        with open(env_path, "w") as fh:
+            fh.write("SUPERAGENT_MAIN_API_KEY=sk-live\n")
+        session = os.path.join(router_dir, "sessions", "s1.json")
+        os.makedirs(os.path.dirname(session))
+        with open(session, "w") as fh:
+            fh.write("{}")
+        # Change the config so the render really changes.
+        with open(self.suite_cfg_path()) as fh:
+            cfg = yaml.safe_load(fh)
+        cfg["security"]["allow_private_urls"] = False
+        with open(self.suite_cfg_path(), "w") as fh:
+            yaml.safe_dump(cfg, fh)
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with open(env_path) as fh:
+            self.assertEqual(fh.read(), "SUPERAGENT_MAIN_API_KEY=sk-live\n")
+        self.assertTrue(os.path.isfile(session))
+        with open(os.path.join(router_dir, "config.yaml")) as fh:
+            self.assertNotIn("allow_private_urls", fh.read())
+        # And a further no-change run reports nothing changed.
+        result = self.run_install()
+        self.assertIn("Changed: nothing", result.stdout)
+
+
 class TestUninstall(InstallerCase):
     def test_uninstall_keeps_user_data_then_purge(self):
         self.install_filled()
@@ -218,6 +253,17 @@ class TestUninstall(InstallerCase):
         self.assertTrue(os.path.isfile(journal))
         # state is gone, so a second uninstall has nothing to go on
         self.assertEqual(self.run_uninstall().returncode, 1)
+
+    def test_uninstall_keeps_profile_env_and_sessions(self):
+        self.install_filled()
+        router_dir = os.path.join(self.home, "profiles", "sa-router")
+        env_path = os.path.join(router_dir, ".env")
+        with open(env_path, "w") as fh:
+            fh.write("SUPERAGENT_MAIN_API_KEY=sk-live\n")
+        result = self.run_uninstall()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse(os.path.exists(os.path.join(router_dir, "config.yaml")))
+        self.assertTrue(os.path.isfile(env_path))
 
 
 if __name__ == "__main__":

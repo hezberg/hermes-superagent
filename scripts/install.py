@@ -183,6 +183,13 @@ def read_state(home):
     return None
 
 
+def _is_protected_rel(rel):
+    """Operator/Hermes property inside a profile dir — never managed,
+    snapshotted, rolled back, or uninstalled by the suite."""
+    parts = rel.replace(os.sep, "/").split("/")
+    return parts[-1] == ".env" or parts[0] in ("sessions", "logs", "memory")
+
+
 def snapshot_prev(home, state):
     """Copy the current generation into superagent/prev/ (one deep)."""
     prev = os.path.join(home, "superagent", "prev")
@@ -203,13 +210,12 @@ def snapshot_prev(home, state):
         os.path.join(home, "superagent", "manifest.json"),
     }
     profiles = (state or {}).get("profiles") or []
-    for profile in profiles:
-        candidates.add(os.path.join(home, "profiles", profile))
-    # Legacy manifests carry no profile list; recover the profile
-    # dirs from their created_paths instead.
-    for path in paths:
-        if os.path.basename(os.path.dirname(path)) == "profiles":
-            candidates.add(path)
+    if not profiles:
+        # Legacy manifests carry no profile list; recover the profile
+        # names from their created_paths instead.
+        for path in paths:
+            if os.path.basename(os.path.dirname(path)) == "profiles":
+                profiles.append(os.path.basename(path))
     manifest = {"version": (state or {}).get("version"), "paths": []}
     for path in sorted(candidates):
         if not os.path.exists(path):
@@ -222,6 +228,27 @@ def snapshot_prev(home, state):
         else:
             shutil.copy2(path, dst)
         manifest["paths"].append(rel)
+    # Profiles: snapshot only the suite-managed files. A profile dir
+    # also holds the operator's .env and Hermes' sessions/logs; a
+    # rollback restores renders, it does not rewind a living profile.
+    recorded = (state or {}).get("files") or {}
+    for profile in profiles:
+        base = os.path.join(home, "profiles", profile)
+        managed = recorded.get(f"profile:{profile}") or {}
+        rels = [r for r in managed if not _is_protected_rel(r)]
+        if not rels and os.path.isdir(base):
+            # Legacy state recorded nothing usable: take the rendered
+            # files only, still skipping protected entries.
+            rels = [r for r in tree_hashes(base, skip_topdirs=("skills",))
+                    if not _is_protected_rel(r)]
+        for rel in rels:
+            src_f = os.path.join(base, rel)
+            if not os.path.isfile(src_f):
+                continue
+            dst_f = os.path.join(prev, "profiles", profile, rel)
+            os.makedirs(os.path.dirname(dst_f), exist_ok=True)
+            shutil.copy2(src_f, dst_f)
+            manifest["paths"].append(os.path.join("profiles", profile, rel))
     with open(os.path.join(prev, "prev.json"), "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=1, ensure_ascii=False)
     return manifest["version"]
@@ -238,7 +265,13 @@ def do_rollback(home):
     for rel in meta.get("paths", []):
         src = os.path.join(prev, rel)
         dst = os.path.join(home, rel)
-        if os.path.isdir(src):
+        if rel.replace(os.sep, "/").startswith("profiles/"):
+            # Profile entries in the snapshot are individual managed
+            # files; copy each back, never replace the living dir.
+            if os.path.isfile(src):
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
+        elif os.path.isdir(src):
             replace_tree(src, dst)
         elif os.path.isfile(src):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -408,6 +441,39 @@ def main(argv=None):
         changes.append(label)
         return "updated"
 
+    def converge_files(src_dir, dst, label, skip_topdirs=()):
+        """Per-file convergence for LIVING directories (profiles).
+
+        A profile directory is not a render artifact: Hermes and the
+        operator keep their own files there — .env holding the API
+        key, sessions, logs, memory. Whole-tree replacement (the old
+        behaviour) deleted the profiles' .env on every config change;
+        the profile then failed every model request while the global
+        .env masked the loss in checks (field failure, 2026-11-01).
+        The suite manages only the files it renders and leaves
+        everything else in the directory untouched.
+        """
+        staged = tree_hashes(src_dir, skip_topdirs=skip_topdirs)
+        changed = False
+        for rel, digest in staged.items():
+            target = os.path.join(dst, rel)
+            current = None
+            if os.path.isfile(target):
+                with open(target, "rb") as fh:
+                    current = hashlib.sha256(fh.read()).hexdigest()
+            if current != digest:
+                changed = True
+                if not args.dry_run:
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    with open(os.path.join(src_dir, rel), "rb") as fh:
+                        data = fh.read()
+                    with open(target, "wb") as fh:
+                        fh.write(data)
+        if changed:
+            changes.append(label)
+            return "updated"
+        return "unchanged"
+
     # ------------------------------------------------------------ resources
     plugin_src = os.path.join(REPO, "plugin", "superagent")
     plugin_dst = os.path.join(home, "plugins", "superagent")
@@ -430,13 +496,16 @@ def main(argv=None):
             say((r.stdout or "") + (r.stderr or ""))
             return EXIT_FAIL
         profile_status = {}
+        managed_profile_files = {}
         for profile in profiles:
-            profile_status[profile] = converge_tree(
+            profile_status[profile] = converge_files(
                 os.path.join(rendered, profile),
                 os.path.join(home, "profiles", profile),
                 f"profile {profile}",
-                preserve=("skills",),
+                skip_topdirs=("skills",),
             )
+            managed_profile_files[profile] = tree_hashes(
+                os.path.join(rendered, profile), skip_topdirs=("skills",))
 
     # skills ride inside the profiles but are not part of the render
     skill_map = [(router, "router")]
@@ -478,9 +547,23 @@ def main(argv=None):
 
     # ------------------------------------------------------------ state
     files = {"plugin": tree_hashes(plugin_dst)}
+    kind_by_profile = {router: "router"}
+    for w in workers:
+        kind_by_profile[w] = "worker"
     for profile in profiles:
-        files[f"profile:{profile}"] = tree_hashes(
-            os.path.join(home, "profiles", profile), skip_topdirs=("skills",))
+        # Only the files the suite renders are recorded as managed.
+        # The rest of a profile directory (.env, sessions, logs)
+        # belongs to Hermes and the operator; uninstall and rollback
+        # must never treat it as suite property.
+        managed = dict(managed_profile_files.get(profile, {}))
+        kind = kind_by_profile.get(profile)
+        if kind:
+            skill_rel = f"skills/{kind}-superagent/SKILL.md"
+            skill_path = os.path.join(home, "profiles", profile, skill_rel)
+            if os.path.isfile(skill_path):
+                with open(skill_path, "rb") as fh:
+                    managed[skill_rel] = hashlib.sha256(fh.read()).hexdigest()
+        files[f"profile:{profile}"] = managed
     created_paths = [plugin_dst, suite_dir, tick_dst] + [
         os.path.join(home, "profiles", p) for p in profiles
     ]

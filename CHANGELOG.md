@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.7 — 2026-11-01
+
+- **Profiles are living directories; the installer no longer
+  replaces them wholesale.** The convergence bug behind a day of
+  confusing failures: every reinstall whose render differed deleted
+  each profile directory and re-created it from the render —
+  including the profile's `.env` (the API key), sessions, and logs.
+  The profile then failed every model request (`request_failed`)
+  while doctor kept reporting the key "in place", because it also
+  counted the global `.env`. Fixes: profiles converge per-file
+  (only rendered files are managed), state records only managed
+  files (skills included), snapshots/rollback/uninstall touch only
+  managed files and explicitly protect `.env`, `sessions/`, `logs/`,
+  and `memory/` even in legacy states. Regression-tested by
+  planting a `.env` and a session file across a config-change
+  reinstall and an uninstall.
+- After upgrading, restore any already-lost profile `.env` once
+  (copy the key line from `~/.hermes/.env`); the installer will
+  never delete it again.
+
 ## 0.5.6 — 2026-11-01
 
 - **Doctor no longer judges the machine's DNS.** The fake-IP check

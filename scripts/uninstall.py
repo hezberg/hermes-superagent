@@ -54,9 +54,51 @@ def main(argv=None):
     targets.append(os.path.join(suite_dir, "state.json"))
     targets.append(os.path.join(suite_dir, "manifest.json"))
 
+    profile_dirs = {
+        os.path.abspath(os.path.join(home, "profiles", p))
+        for p in state.get("profiles", [])
+    }
+    managed = state.get("files") or {}
+
+    def is_protected(rel):
+        parts = rel.replace(os.sep, "/").split("/")
+        return parts[-1] == ".env" or parts[0] in ("sessions", "logs", "memory")
+
     removed = []
+    kept_profiles = []
     for path in targets:
         if not os.path.exists(path):
+            continue
+        if os.path.abspath(path) in profile_dirs and os.path.isdir(path):
+            # A profile directory is a living directory: remove only
+            # the files the suite manages. The operator's own files
+            # (.env, sessions, logs, memory) are not suite property,
+            # and legacy states that recorded them are overridden.
+            name = os.path.basename(path)
+            for rel in (managed.get(f"profile:{name}") or {}):
+                if is_protected(rel):
+                    continue
+                fp = os.path.join(path, rel)
+                if os.path.isfile(fp):
+                    if args.dry_run:
+                        say(f"[dry-run] remove {fp}")
+                    else:
+                        os.remove(fp)
+                    removed.append(fp)
+            if not args.dry_run:
+                def prune(d):
+                    for entry in os.listdir(d):
+                        full = os.path.join(d, entry)
+                        if os.path.isdir(full):
+                            prune(full)
+                    if d != path and not os.listdir(d):
+                        os.rmdir(d)
+
+                prune(path)
+                if os.path.isdir(path) and not os.listdir(path):
+                    os.rmdir(path)
+            if os.path.isdir(path) and os.listdir(path):
+                kept_profiles.append(name)
             continue
         if args.dry_run:
             say(f"[dry-run] remove {path}")
@@ -65,6 +107,9 @@ def main(argv=None):
         else:
             os.remove(path)
         removed.append(path)
+    if kept_profiles:
+        say(f"Profile directories kept (they hold your own files): {', '.join(kept_profiles)} - "
+            "the suite's rendered files were removed; delete the directories by hand if you want them gone.")
 
     if args.purge:
         if os.path.isdir(suite_dir) and not args.dry_run:
