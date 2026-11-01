@@ -494,6 +494,10 @@ class TestDayOne(InstallerCase):
         self.assertNotIn("no line for SUPERAGENT_MAIN_API_KEY", second.stdout)
         self.assertNotIn("WARNING: postflight", second.stdout)
         self.assertIn("Finish with: hermes gateway restart", second.stdout)
+        # A fresh install points at step 2 — the setup wizard — or a
+        # bootstrap-only user never learns the chat entry is unwired.
+        self.assertIn("Now step 2 of the install: hermes superagent setup",
+                      second.stdout)
         for profile in ("sa-router", "sa-worker-general"):
             with open(os.path.join(self.home, "profiles", profile, ".env")) as fh:
                 self.assertIn("SUPERAGENT_MAIN_API_KEY=", fh.read())

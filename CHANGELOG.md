@@ -1,3 +1,17 @@
+## 0.12.1 — 2026-11-01
+
+- **README quickstart is the real two steps now** — bootstrap,
+  then `hermes superagent setup` — instead of presenting the
+  wizard as an optional extra for non-defaults: with defaults
+  alone the chat entry is never wired, so step 2 is the other
+  half of a fresh install. (Bootstrap does not absorb the wizard:
+  under `curl | sh` the script itself occupies stdin, so an
+  interactive wizard cannot read answers reliably through it.)
+- **The installer says so too:** a fresh, clean install now ends
+  with "Now step 2 of the install: hermes superagent setup"
+  instead of going straight to "give the Router a task" —
+  convergence and upgrade runs are unchanged.
+
 ## 0.12.0 — 2026-11-01
 
 - **`hermes superagent uninstall`** — the suite removes itself:

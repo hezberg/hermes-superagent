@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.12.0.** The dispatch chain is verified end-to-end on a
+> **Status: v0.12.1.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). The suite is built from Hermes'
 > own mechanisms wherever they exist, keeps no provider system of
@@ -32,12 +32,11 @@ curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/boot
 ```
 
 This clones the suite into `~/.hermes/superagent/src` and runs the
-installer once. If your default Hermes profile already talks to a
-model, that single run is a complete install: roles inherit the
-default model, keys converge from `~/.hermes/.env`, kanban and the
-reminder job are set up, and a doctor verdict prints at the end.
-Then one `hermes gateway restart`, and the Router answers at
-`hermes --profile sa-router`.
+installer once, laying down profiles, the board and the reminder
+job with defaults: roles inherit the default profile's model,
+keys converge from `~/.hermes/.env`. That is the machinery in
+place — not yet your configuration. Step 2 is the other half of
+a fresh install, not an optional extra.
 
 Notes:
 - Fresh Hermes with no model yet? Run `hermes setup` first — the
@@ -45,29 +44,28 @@ Notes:
 - Nothing is left in your home directory; re-running the line
   updates the managed clone and re-converges.
 
-### 2. Configure — the wizard (only for non-defaults)
+### 2. Configure — run the wizard
 
 ```bash
 hermes superagent setup
 ```
 
-Defaults already work; run the wizard when you want something
-else: extra workers (research/deep specialists are opt-in; one
-general worker is the default), a different provider or model per
-role — chosen from a list fetched live from the provider's own
-endpoint — a Feishu entry, or a delivery platform for reminders.
-Strict where it matters: one Feishu app serves exactly one
-profile (a duplicate is a hard stop, not a warning), and a
-binding that produced no app sends you back into the step. The
-wizard is transactional: quit before its commit point and
-nothing on disk changes. Re-running it reconfigures in place;
-everyday tweaks are lighter still —
-`hermes superagent set-model <profile> <model>`, or edit
-`~/.hermes/superagent/superagent.yaml` (edits apply automatically,
-no reinstall).
+This is where the install becomes yours: worker topology (one
+general worker by default; research/deep specialists are opt-in),
+a provider and model per role — chosen from a list fetched live
+from the provider's own endpoint — the Feishu chat entry, and a
+delivery platform for reminders. Strict where it matters: one
+Feishu app serves exactly one profile (a duplicate is a hard
+stop, not a warning), and a binding that produced no app sends
+you back into the step. The wizard is transactional: quit before
+its commit point and nothing on disk changes. It ends by
+offering the gateway restart; after that, the Router answers at
+`hermes --profile sa-router` — and in Feishu, if you wired it.
 
-Straight into the wizard on a fresh machine:
-`curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/bootstrap.sh | sh -s -- --wizard`.
+Re-running the wizard reconfigures in place; everyday tweaks are
+lighter still — `hermes superagent set-model <profile> <model>`,
+or edit `~/.hermes/superagent/superagent.yaml` (edits apply
+automatically, no reinstall).
 
 Upgrades: `hermes superagent upgrade`. Uninstall:
 `hermes superagent uninstall` (data kept unless `--purge`).

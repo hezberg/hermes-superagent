@@ -871,6 +871,15 @@ def main(argv=None):
         say("The suite is installed, but the Router cannot call a model until the "
             "key above is in place. Once it is, everything else is automatic — "
             "then: hermes gateway restart, and hermes --profile sa-router.")
+    elif not old_version and not hard_errors:
+        # A fresh install is only half done at this point: the
+        # defaults are laid down, but topology, per-role models
+        # and the chat entry are the wizard's step — say so, or a
+        # bootstrap-only user never learns it exists.
+        say("Installed with defaults. Now step 2 of the install: "
+            "hermes superagent setup — worker topology, per-role "
+            "models, and the chat entry (e.g. Feishu).")
+        say("Finish with: hermes gateway restart - then give the Router a task.")
     else:
         say("Finish with: hermes gateway restart - then give the Router a task.")
     if hard_errors:
