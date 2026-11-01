@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.2 — 2026-11-01
+
+- **Bootstrap install; nothing lives outside Hermes' directory.**
+  Operator's standing preference: no program checkouts scattered in
+  the home directory. New `bootstrap.sh` (one curl line in the
+  README) clones the suite into its managed source home
+  `~/.hermes/superagent/src` — alongside the plugin, profiles,
+  config, and history, which already lived under `~/.hermes/` — and
+  runs the installer from there. A stuck managed clone re-clones
+  itself (it holds no user data). The checkout-based flow remains,
+  documented as the development path.
+
 ## 0.5.1 — 2026-11-01
 
 - **`hermes superagent upgrade`.** Field lesson, same morning: the

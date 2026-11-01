@@ -10,7 +10,7 @@ never in the chat.
 
 请帮我安装并配置 hermes-superagent，全程按它仓库里的 SETUP.md 执行：
 
-1. 先克隆仓库：`git clone https://github.com/hezberg/hermes-superagent.git`（已存在就先 `git pull` 更新）。
+1. 先跑引导安装（源码会落在 Hermes 自己的目录里，不要往我的主目录克隆任何东西）：`curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/bootstrap.sh | sh`。它会生成配置文件并停下，仓库在 `~/.hermes/superagent/src`，需要读 SETUP.md 就去那里读。
 2. 完整读一遍 SETUP.md，按它走：先探查、再逐个问我问题（一个问题一条消息、带上你的推荐答案）、把计划汇总成一条消息让我确认，确认后才动手。
 3. 硬规则：
    - 绝不要让我在聊天里发 API key，也不要读取、打印或保存任何 key 的值。到需要 key 时，给我确切的一行（`<变量名>=<key>`，写进 `~/.hermes/.env`），我自己在终端完成，你只确认变量名已就位。

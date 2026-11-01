@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.5.1.** The dispatch chain is verified end-to-end on a
+> **Status: v0.5.2.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). On top of the v0.1 skeleton (layout,
 > configuration system, plugin registration, profile rendering,
@@ -38,7 +38,20 @@ durable handoff between them.
 Requirements: Hermes (latest) already installed and run at least once,
 Python 3 with PyYAML (ships with Hermes). Linux (Ubuntu 24.04) and macOS.
 
-### Recommended: let Hermes install it for you
+### Recommended: one line, nothing left in your home directory
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/bootstrap.sh | sh
+```
+
+The bootstrap keeps the suite's source inside Hermes' own directory
+(`~/.hermes/superagent/src` — the plugin, profiles, config, and
+history all live under `~/.hermes/` too) and runs the installer,
+which generates your config and stops. Fill the config in, run the
+same line again, and you are done. After that, upgrades are simply
+`hermes superagent upgrade` — no checkout to remember, anywhere.
+
+### Or: let Hermes install it for you
 
 Open a chat with your stock Hermes (default profile, CLI or Desktop)
 and paste the prompt below — also saved as
@@ -53,7 +66,7 @@ key** — in your own terminal, into `~/.hermes/.env`, never in the chat.
 
 请帮我安装并配置 hermes-superagent，全程按它仓库里的 SETUP.md 执行：
 
-1. 先克隆仓库：`git clone https://github.com/hezberg/hermes-superagent.git`（已存在就先 `git pull` 更新）。
+1. 先跑引导安装（源码会落在 Hermes 自己的目录里，不要往我的主目录克隆任何东西）：`curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/bootstrap.sh | sh`。它会生成配置文件并停下，仓库在 `~/.hermes/superagent/src`，需要读 SETUP.md 就去那里读。
 2. 完整读一遍 SETUP.md，按它走：先探查、再逐个问我问题（一个问题一条消息、带上你的推荐答案）、把计划汇总成一条消息让我确认，确认后才动手。
 3. 硬规则：
    - 绝不要让我在聊天里发 API key，也不要读取、打印或保存任何 key 的值。到需要 key 时，给我确切的一行（`<变量名>=<key>`，写进 `~/.hermes/.env`），我自己在终端完成，你只确认变量名已就位。
@@ -65,7 +78,7 @@ key** — in your own terminal, into `~/.hermes/.env`, never in the chat.
 
 </details>
 
-### Manual install
+### Manual install (from a checkout — for development)
 
 ```bash
 git clone https://github.com/hezberg/hermes-superagent.git
