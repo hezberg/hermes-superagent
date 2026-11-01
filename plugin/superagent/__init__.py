@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.6.1"
+PLUGIN_VERSION = "0.6.2"
 
 
 # --------------------------------------------------------------------------
@@ -402,6 +402,24 @@ def _doctor_findings():
         if var:
             env_present[var] = var in present_names
     findings += doc.check_key_env(providers, env_present)
+    # Convergence: a profile copy that differs from the global .env
+    # is a stale key still being sent. Compare values here; doctor
+    # receives only names of the offenders.
+    from .reconcile import _read_env
+
+    global_env = _read_env(os.path.join(hermes_home(), ".env"))
+    stale = {}
+    for p in providers.values():
+        var = (p or {}).get("api_key_env")
+        if not var or var not in global_env:
+            continue
+        for n in names:
+            if not n:
+                continue
+            profile_env = _read_env(os.path.join(hermes_home(), "profiles", n, ".env"))
+            if var in profile_env and profile_env[var] != global_env[var]:
+                stale.setdefault(n, []).append(var)
+    findings += doc.check_key_convergence(stale)
     findings += doc.check_private_base_url(providers)
 
     security = cfg.get("security") or {}

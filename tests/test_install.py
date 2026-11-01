@@ -267,8 +267,13 @@ class TestProfilesAreLivingDirs(InstallerCase):
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         with open(env_path) as fh:
-            self.assertEqual(
-                fh.read(), "SUPERAGENT_MAIN_API_KEY=sk-live\nOTHER_TOKEN=keep-me\n")
+            env_lines = fh.read().splitlines()
+        # Unmanaged lines and the file itself survive untouched;
+        # the suite-managed key converges onto the global .env.
+        self.assertTrue(any(ln.startswith("OTHER_TOKEN=") for ln in env_lines))
+        with open(os.path.join(self.home, ".env")) as fh:
+            global_line = fh.read().strip()
+        self.assertIn(global_line, env_lines)
         self.assertTrue(os.path.isfile(session))
         with open(os.path.join(router_dir, "config.yaml")) as fh:
             self.assertNotIn("allow_private_urls", fh.read())
@@ -314,3 +319,57 @@ class TestUninstall(InstallerCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestKeyRotation(InstallerCase):
+    """Rotating the key in the global .env is a one-file edit: the
+    global file is the single source of truth, and every profile
+    copy converges onto it on the next install — including a copy
+    someone hand-edited, which is a stale copy, not a preference."""
+
+    def set_global_key(self, value):
+        with open(os.path.join(self.home, ".env"), "w") as fh:
+            fh.write(f"SUPERAGENT_MAIN_API_KEY={value}\n")
+
+    def profile_key(self, profile):
+        path = os.path.join(self.home, "profiles", profile, ".env")
+        if not os.path.isfile(path):
+            return None
+        with open(path) as fh:
+            for line in fh:
+                if line.startswith("SUPERAGENT_MAIN_API_KEY="):
+                    return line.strip().split("=", 1)[1]
+        return None
+
+    def test_synced_copies_follow_a_global_rotation(self):
+        self.install_filled()
+        self.assertTrue(self.profile_key("sa-router"))
+        self.set_global_key("sk-ROTATED-KEY")
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.profile_key("sa-router"), "sk-ROTATED-KEY")
+        self.assertEqual(self.profile_key("sa-worker-general"), "sk-ROTATED-KEY")
+
+    def test_profile_values_converge_to_the_global_key(self):
+        self.install_filled()
+        path = os.path.join(self.home, "profiles", "sa-router", ".env")
+        with open(path) as fh:
+            body = fh.read()
+        planted = self.profile_key("sa-router")
+        self.assertTrue(planted)
+        with open(path, "w") as fh:
+            fh.write(body.replace(planted, "sk-HAND-EDITED"))
+        self.set_global_key("sk-ROTATED-KEY")
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.profile_key("sa-router"), "sk-ROTATED-KEY")
+        self.assertEqual(self.profile_key("sa-worker-general"), "sk-ROTATED-KEY")
+
+    def test_state_records_hashes_not_values(self):
+        self.install_filled()
+        with open(os.path.join(self.home, "superagent", "state.json")) as fh:
+            raw = fh.read()
+        state = json.loads(raw)
+        digest = state["synced_keys"]["sa-router"]["SUPERAGENT_MAIN_API_KEY"]
+        self.assertEqual(len(digest), 64)
+        self.assertNotIn(self.profile_key("sa-router"), raw)

@@ -5,8 +5,10 @@ are renders of it. Demanding a manual installer run after every
 edit is a ritual, not a mechanism (operator's verdict, 2026-11-01:
 "I edit the file, then I still have to run upgrade?"). So the
 suite reconciles on its own: whenever the config is newer than the
-install state, the next CLI command — or the reminder tick, within
-one cycle — re-runs the installer from the managed source checkout.
+install state — or a profile's key copy no longer matches the
+global .env, the single source of truth for keys — the next CLI
+command — or the reminder tick, within one cycle — re-runs the
+installer from the managed source checkout.
 
 Failures (a config that does not validate) are surfaced once per
 config version, never spammed every tick; the bookkeeping lives in
@@ -46,6 +48,44 @@ def config_stale(suite_dir):
     return os.path.getmtime(cfg) > os.path.getmtime(state)
 
 
+def _read_env(path):
+    values = {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    name, _, value = line.partition("=")
+                    values[name.strip()] = value.strip()
+    except OSError:
+        pass
+    return values
+
+
+def keys_stale(home, suite_dir):
+    """A rotated global key must reach the profiles by itself too.
+
+    ~/.hermes/.env is the single source of truth for keys. For every
+    (profile, variable) the installer has ever converged (recorded
+    as hashes in state.json `synced_keys`), a profile value that
+    differs from the current global value means propagation is
+    owed. Values are compared, never read out of this function.
+    """
+    from .upgrade import read_state
+
+    synced = (read_state(suite_dir) or {}).get("synced_keys") or {}
+    if not synced:
+        return False
+    global_env = _read_env(os.path.join(home, ".env"))
+    for profile, variables in synced.items():
+        profile_env = _read_env(os.path.join(home, "profiles", profile, ".env"))
+        for var in (variables or {}):
+            new = global_env.get(var) or os.environ.get(var)
+            if new and profile_env.get(var) != new:
+                return True
+    return False
+
+
 def _default_runner(cmd):
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
@@ -59,11 +99,14 @@ def maybe_reconcile(home, suite_dir, interactive=False, runner=None):
     (no source checkout to run the installer from). `message` is
     set only when the caller should surface it: a fresh failure, or
     any attempt a human is watching (interactive=True).
+
+    Stale means either trigger: the config was edited, or a synced
+    profile key no longer matches a rotated global key.
     """
-    if not config_stale(suite_dir):
+    if not config_stale(suite_dir) and not keys_stale(home, suite_dir):
         return {"status": "fresh", "message": None}
     cfg_path = os.path.join(suite_dir, "superagent.yaml")
-    mtime = os.path.getmtime(cfg_path)
+    mtime = os.path.getmtime(cfg_path) if os.path.isfile(cfg_path) else 0
     book = _read_book(suite_dir)
     if book.get("config_mtime") == mtime and book.get("failed") and not interactive:
         return {"status": "failed", "message": None}

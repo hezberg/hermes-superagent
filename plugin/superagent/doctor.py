@@ -66,6 +66,24 @@ def check_key_env(providers, env_present):
     return out
 
 
+def check_key_convergence(stale):
+    """stale: {profile: [var, ...]} — profile .env copies whose value
+    differs from the global .env. The global file is the single
+    source of truth for keys; a differing copy is yesterday's key
+    still being sent. (Booleans and names only — never values.)"""
+    out = []
+    for profile, variables in sorted((stale or {}).items()):
+        for var in variables:
+            out.append(_finding(
+                "error",
+                f"{profile}'s .env holds a different {var} than the global .env - "
+                "the profile is still sending the old key.",
+                "It converges by itself on the next superagent command or reminder "
+                "tick; if this persists, run hermes superagent upgrade.",
+            ))
+    return out
+
+
 def check_router_toolsets(profile_name, profile_cfg):
     cfg = profile_cfg or {}
     agent = cfg.get("agent") or {}

@@ -1,3 +1,20 @@
+## 0.6.2 — 2026-11-01
+
+- **Keys have a single source of truth: ~/.hermes/.env.** The
+  fill-gaps-only key sync protected a hypothetical per-profile key
+  and broke the real workflow — rotate the key in the global file
+  and the profiles kept sending the old one (operator's verdict:
+  point fixes, no global thinking). The installer now CONVERGES
+  each profile's suite-managed key variables onto the global value,
+  and the auto-reconcile from 0.6.1 also triggers on key drift, so
+  a rotation propagates by itself (next command, or within one
+  reminder tick) with no upgrade run and no hand-editing of
+  profile files. state.json records value hashes (never values)
+  so drift is detectable without reading secrets.
+- **Doctor checks key convergence**, not just presence: a profile
+  copy that differs from the global .env is now an error finding
+  (presence-only was the false green that masked this class).
+
 ## 0.6.1 — 2026-11-01
 
 - **Config edits apply themselves.** Requiring `upgrade` after

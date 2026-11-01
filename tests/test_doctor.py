@@ -145,3 +145,14 @@ class TestInstallDrift(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestKeyConvergence(unittest.TestCase):
+    def test_differing_profile_copy_is_an_error(self):
+        findings = doc.check_key_convergence(
+            {"sa-router": ["SUPERAGENT_MAIN_API_KEY"]})
+        self.assertEqual(findings[0]["level"], "error")
+        self.assertIn("different", findings[0]["text"])
+
+    def test_converged_is_silent(self):
+        self.assertEqual(doc.check_key_convergence({}), [])

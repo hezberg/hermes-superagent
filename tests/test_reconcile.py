@@ -82,6 +82,22 @@ class TestMaybeReconcile(SuiteCase):
             self.home, self.suite, runner=lambda cmd: (0, ""))
         self.assertEqual(result["status"], "skipped")
 
+    def test_key_rotation_alone_triggers_reconcile(self):
+        import hashlib
+
+        with open(os.path.join(self.suite, "state.json"), "w") as fh:
+            json.dump({"synced_keys": {"sa-router": {
+                "SUPERAGENT_MAIN_API_KEY":
+                    hashlib.sha256(b"old-key").hexdigest()}}}, fh)
+        os.makedirs(os.path.join(self.home, "profiles", "sa-router"), exist_ok=True)
+        with open(os.path.join(self.home, ".env"), "w") as fh:
+            fh.write("SUPERAGENT_MAIN_API_KEY=new-key\n")
+        with open(os.path.join(self.home, "profiles", "sa-router", ".env"), "w") as fh:
+            fh.write("SUPERAGENT_MAIN_API_KEY=old-key\n")
+        result, calls = self.run_reconcile(code=0)
+        self.assertEqual(result["status"], "reconciled")
+        self.assertEqual(len(calls), 1)
+
 
 CONFIG_TEXT = """\
 # a comment the operator wrote
@@ -185,3 +201,42 @@ class TestTickReconciles(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestKeysStale(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="sa-keys-")
+        self.home = os.path.join(self.tmp, "home")
+        self.suite = os.path.join(self.home, "superagent")
+        os.makedirs(os.path.join(self.home, "profiles", "sa-router"))
+        os.makedirs(self.suite)
+
+    def plant(self, global_value, profile_value, recorded_value):
+        with open(os.path.join(self.home, ".env"), "w") as fh:
+            fh.write(f"SUPERAGENT_MAIN_API_KEY={global_value}\n")
+        with open(os.path.join(self.home, "profiles", "sa-router", ".env"), "w") as fh:
+            fh.write(f"SUPERAGENT_MAIN_API_KEY={profile_value}\n")
+        import hashlib
+        with open(os.path.join(self.suite, "state.json"), "w") as fh:
+            json.dump({"synced_keys": {"sa-router": {
+                "SUPERAGENT_MAIN_API_KEY":
+                    hashlib.sha256(recorded_value.encode()).hexdigest()}}}, fh)
+
+    def test_rotated_global_key_is_stale(self):
+        self.plant("new-key", "old-key", "old-key")
+        self.assertTrue(reconcile.keys_stale(self.home, self.suite))
+
+    def test_in_step_keys_are_fresh(self):
+        self.plant("same-key", "same-key", "same-key")
+        self.assertFalse(reconcile.keys_stale(self.home, self.suite))
+
+    def test_differing_profile_value_is_stale(self):
+        # Whatever a profile copy holds, if it is not the global
+        # value, propagation is owed — hand-edits included.
+        self.plant("new-key", "hand-edited-key", "old-key")
+        self.assertTrue(reconcile.keys_stale(self.home, self.suite))
+
+    def test_no_baseline_no_opinion(self):
+        with open(os.path.join(self.suite, "state.json"), "w") as fh:
+            json.dump({}, fh)
+        self.assertFalse(reconcile.keys_stale(self.home, self.suite))

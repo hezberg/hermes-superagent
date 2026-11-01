@@ -107,7 +107,11 @@ operator step (entering keys). Ask for one confirmation.
    receive, print, or store the value yourself; ask only for
    confirmation that the line exists. **The installer syncs the key
    from the global `.env` into each profile's `.env` by itself** —
-   nobody copies keys between profiles by hand. Then the gateways
+   nobody copies keys between profiles by hand. The global `.env`
+   is the single source of truth for keys: rotating a key later is
+   editing that one line, and the profiles converge onto it
+   automatically (next superagent command, or within one reminder
+   tick). Then the gateways
    need a restart to pick it up — if you are running inside a
    gateway chat, warn the operator the conversation will drop and
    resume, and make the restart your last step.

@@ -101,16 +101,44 @@ def _read_env_file(path):
     return values
 
 
-def sync_profile_keys(home, eff_cfg, dry_run, changes):
-    """Plant each profile's provider key into that profile's .env.
+def _value_sha(value):
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
-    The value is sourced from the global ~/.hermes/.env (falling
-    back to the process environment) on the operator's own machine:
-    it is never printed, never leaves the box, and the files are
-    0600. This replaces the manual copy-the-key-into-every-profile
-    ritual — the installer owns it now. Returns key variable names
-    that have no value anywhere (the operator's one remaining job:
-    put them in ~/.hermes/.env).
+
+def _write_env_value(path, var, value):
+    lines = []
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    out = [ln for ln in lines if not ln.startswith(var + "=")]
+    out.append(f"{var}={value}")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(out) + "\n")
+    os.chmod(path, 0o600)
+
+
+def sync_profile_keys(home, eff_cfg, dry_run, changes, synced=None):
+    """Converge each profile's provider key onto the global .env.
+
+    Single source of truth: ~/.hermes/.env. The suite chose the key
+    variable names it rendered into these profiles' configs, so for
+    those variables the global value IS the value — a profile copy
+    that differs is a stale copy, not a preference, and it follows
+    the global one. (An earlier fill-gaps-only rule protected a
+    hypothetical per-profile key at the cost of the operator's real
+    workflow: rotate the key in the global file and have it take
+    effect. The operator's verdict, 2026-11-01: no global thinking.
+    A per-profile key, if ever wanted, belongs in the suite config
+    as an explicit feature — not in a hand-edited .env.)
+
+    Values are never printed and never leave the box; files are
+    0600. Returns (missing_vars, baseline): variables with no value
+    in the global file or the process environment (the operator's
+    one remaining job: put them in ~/.hermes/.env), and a
+    {profile: {var: sha256}} baseline for state.json, so the plugin
+    can later tell "global rotated, profiles not yet converged"
+    apart from "everything in step" without seeing any value.
     """
     providers = eff_cfg.get("providers") or {}
     roles = [eff_cfg.get("router") or {}] + list(eff_cfg.get("workers") or [])
@@ -121,33 +149,26 @@ def sync_profile_keys(home, eff_cfg, dry_run, changes):
         var = (providers.get(role.get("provider")) or {}).get("api_key_env")
         if role.get("profile") and var:
             wanted[role["profile"]] = var
+    baseline = {p: dict(v) for p, v in (synced or {}).items()}
     if not wanted:
-        return []
+        return [], baseline
     global_env = _read_env_file(os.path.join(home, ".env"))
     missing = []
     for profile, var in sorted(wanted.items()):
         path = os.path.join(home, "profiles", profile, ".env")
-        existing = _read_env_file(path).get(var)
-        if existing:
-            continue  # the profile already has a value; it is its own
         value = global_env.get(var) or os.environ.get(var)
         if not value:
             if var not in missing:
                 missing.append(var)
-            continue
-        lines = []
-        if os.path.isfile(path):
-            with open(path, encoding="utf-8") as fh:
-                lines = fh.read().splitlines()
-        out = [ln for ln in lines if not ln.startswith(var + "=")]
-        out.append(f"{var}={value}")
-        if not dry_run:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w", encoding="utf-8") as fh:
-                fh.write("\n".join(out) + "\n")
-            os.chmod(path, 0o600)
-        changes.append(f"key sync ({profile})")
-    return missing
+            continue  # nothing to converge onto; profile left as-is
+        current = _read_env_file(path).get(var)
+        if current != value:
+            if not dry_run:
+                _write_env_value(path, var, value)
+            changes.append(f"key sync ({profile})" if not current
+                           else f"key sync ({profile}: updated)")
+        baseline.setdefault(profile, {})[var] = _value_sha(value)
+    return missing, baseline
 
 
 def load_yaml(path):
@@ -617,7 +638,15 @@ def main(argv=None):
         with open(src, "rb") as fh:
             converge_file(fh.read(), dst, f"{kind} skill ({profile})")
 
-    missing_key_vars = sync_profile_keys(home, eff_cfg, args.dry_run, changes)
+    prior_synced = {}
+    if os.path.isfile(state_path(home)):
+        try:
+            with open(state_path(home), encoding="utf-8") as fh:
+                prior_synced = json.load(fh).get("synced_keys") or {}
+        except Exception:
+            prior_synced = {}
+    missing_key_vars, synced_keys = sync_profile_keys(
+        home, eff_cfg, args.dry_run, changes, synced=prior_synced)
 
     tick_src = os.path.join(REPO, "scripts", "reminder_tick.py")
     with open(tick_src, encoding="utf-8") as fh:
@@ -680,6 +709,10 @@ def main(argv=None):
         # never has to ask the operator where the checkout lives.
         "source_repo": REPO,
         "repo_url": repo_url(),
+        # Hashes (never values) of the keys the sync planted in each
+        # profile, so a later global-key rotation can tell a synced
+        # copy apart from a profile's own deliberate value.
+        "synced_keys": synced_keys,
     }
     if not args.dry_run:
         os.makedirs(suite_dir, exist_ok=True)
