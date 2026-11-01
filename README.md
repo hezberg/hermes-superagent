@@ -70,34 +70,6 @@ automatically, no reinstall).
 Upgrades: `hermes superagent upgrade`. Uninstall:
 `hermes superagent uninstall` (data kept unless `--purge`).
 
-### Or: let Hermes install it for you
-
-Open a chat with your stock Hermes (default profile, CLI or Desktop)
-and paste the prompt below — also saved as
-[INSTALL_PROMPT.md](INSTALL_PROMPT.md). Hermes follows
-[SETUP.md](SETUP.md): it probes your install, asks a few questions one
-at a time (each with a recommended answer), shows you a plan, and only
-then installs. **The one step that stays with you is entering your API
-key** — in your own terminal, into `~/.hermes/.env`, never in the chat.
-
-<details>
-<summary>Install prompt (click to expand)</summary>
-
-Please install and configure hermes-superagent for me, following the SETUP.md in its repo throughout:
-
-1. Start with the guided install (the source must land inside Hermes' own directory — do not clone anything into my home directory): `curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/bootstrap.sh | sh`. It generates the config file and stops; the repo lives at `~/.hermes/superagent/src` — read SETUP.md there.
-2. Read SETUP.md in full and follow it: probe the environment first, then ask me the questions one at a time (one question per message, each with your recommended answer), then summarize the plan in a single message for my confirmation — only start once I confirm.
-3. Hard rules:
-   - Never ask me to send an API key in chat, and never read, print or store any key value. When a key is needed, give me the exact line (`<VAR_NAME>=<key>`, to go into `~/.hermes/.env`); I will do it in my own terminal — you only verify the variable name is in place.
-   - Configuration: you ask me the questions in this chat and write the config yourself, following SETUP.md. The interactive wizard (`hermes superagent setup`) is a terminal tool for me to run myself — do not try to drive it from this chat. Writing the config by hand: run `python3 scripts/install.py` once — it generates ~/.hermes/superagent/superagent.yaml and stops; write the answers I gave into that file (show me before writing), then run it once more to finish the install. Never hand-edit any rendered file under `~/.hermes/profiles/`, and never leave any of my config in the repo tree.
-   - If you are running inside a gateway conversation, warn me before restarting the gateway that the conversation will drop, and make the restart the very last step.
-   - If this conversation is itself running over Feishu, the Feishu app carrying it belongs to the default profile: never move, rebind or copy that app to the Router — two profiles bound to one app fight over its event stream. The Router needs a separate app of its own; if I don't have one, skip the chat entry and say so in the handover.
-4. Done means every item checks out: the install succeeded; `hermes superagent status` works; `hermes superagent doctor` shows no ✗ at all; finally, run a small test task through sa-router and confirm a card lands on the board and completes.
-5. Reminder delivery: after the install, ask me which platform the unfinished-work reminders should be delivered to, and point the cron job's `--deliver` there; if I say I'll decide later, skip it and write the fix-up steps into the handover.
-6. When everything is done, hand over in plain language: how I dispatch work, where I watch progress, and how I uninstall.
-
-</details>
-
 ### Manual install (from a checkout — for development)
 
 ```bash
@@ -123,6 +95,42 @@ python3 scripts/install.py
 # Router from the Hermes CLI and give it a task:
 hermes --profile sa-router
 ```
+
+## Using it
+
+**Give work.** Talk to the Router like a chief of staff:
+`hermes --profile sa-router`, or in Feishu if you wired the
+entry. Say what you want done — the Router decomposes it,
+creates cards on the board and dispatches workers; it never does
+the work itself. Big jobs become linked parent/child cards, and
+every card carries its goal and completion contract with it.
+
+**Watch progress.**
+- `/tasks` in a suite chat: the live board — what's running,
+  what's blocked, what just finished.
+- `hermes superagent status` in the terminal: profiles, board,
+  journal at a glance.
+- From Feishu there is nothing to poll: a card created from chat
+  pushes its result back into the same conversation when it
+  finishes. Cards dispatched from the CLI are covered by the
+  reminder tick (every 10 minutes) — it reports completions and
+  speaks up when work blocks, stalls, or finishes unreviewed,
+  and stays silent when nothing changed.
+
+**Recall what's been done.** Finished cards land in the journal,
+which the Router (and you) can search: `hermes superagent digest`
+for recent completions, `hermes superagent recall <keyword>` for
+a specific one. Asking the Router "what happened with X?" works
+too — finished work is its long-term memory.
+
+**Steer or stop.** `/stop` in chat asks the Router to block a
+running task; plain language works as well ("hold the research
+card until I say go").
+
+**Look after it.** `hermes superagent doctor` — a plain-language
+health check that names the fix, not just the fault. Change a
+role's model with `hermes superagent set-model <profile> <model>`
+(`hermes superagent providers` lists what your Hermes offers).
 
 ## Beyond the design article
 
@@ -171,7 +179,6 @@ this suite's own work:
 | `tests/` | Unit tests: `python3 -m unittest discover -s tests` |
 | `hermes superagent setup` / `uninstall` | The guided install wizard / verified-clean self-uninstall (engines: `scripts/install.py`, `scripts/uninstall.py`) |
 | `SETUP.md` | The agent-guided setup runbook (probe → questions → plan → execute → hand over) |
-| `INSTALL_PROMPT.md` | The paste-ready prompt that hands the setup to your Hermes |
 | `docs/` | Architecture mapping, config reference, assumptions, product principles |
 
 ## Design notes
