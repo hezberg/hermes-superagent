@@ -54,29 +54,44 @@ def _read_env(path):
         with open(path, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
+                if line.startswith("export "):
+                    line = line[len("export "):].lstrip()
                 if line and not line.startswith("#") and "=" in line:
                     name, _, value = line.partition("=")
-                    values[name.strip()] = value.strip()
+                    value = value.strip()
+                    if len(value) >= 2 and value[0] == value[-1] \
+                            and value[0] in "\"'":
+                        value = value[1:-1]
+                    values[name.strip()] = value
     except OSError:
         pass
     return values
 
 
-def keys_stale(home, suite_dir):
+def keys_stale(home, suite_dir, role_vars=None):
     """A rotated global key must reach the profiles by itself too.
 
-    ~/.hermes/.env is the single source of truth for keys. For every
-    (profile, variable) the installer has ever converged (recorded
-    as hashes in state.json `synced_keys`), a profile value that
-    differs from the current global value means propagation is
-    owed. Values are compared, never read out of this function.
+    ~/.hermes/.env is the single source of truth for keys. When the
+    caller supplies the roles' resolved key variables, the check is
+    purely comparative — a profile whose copy is missing OR differs
+    means propagation is owed (this also covers keys that were never
+    synced because they did not exist at install time). Without
+    role_vars, fall back to the installer's recorded baseline
+    (state.json `synced_keys` hashes).
     """
+    global_env = _read_env(os.path.join(home, ".env"))
+    if role_vars:
+        for profile, var in role_vars.items():
+            new = global_env.get(var) or os.environ.get(var)
+            if new and _read_env(
+                    os.path.join(home, "profiles", profile, ".env")).get(var) != new:
+                return True
+        return False
     from .upgrade import read_state
 
     synced = (read_state(suite_dir) or {}).get("synced_keys") or {}
     if not synced:
         return False
-    global_env = _read_env(os.path.join(home, ".env"))
     for profile, variables in synced.items():
         profile_env = _read_env(os.path.join(home, "profiles", profile, ".env"))
         for var in (variables or {}):
@@ -91,7 +106,7 @@ def _default_runner(cmd):
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
-def maybe_reconcile(home, suite_dir, interactive=False, runner=None):
+def maybe_reconcile(home, suite_dir, interactive=False, runner=None, role_vars=None):
     """Reconcile if the config outruns the install state.
 
     Returns {"status": ..., "message": ...}: status is one of
@@ -103,7 +118,7 @@ def maybe_reconcile(home, suite_dir, interactive=False, runner=None):
     Stale means either trigger: the config was edited, or a synced
     profile key no longer matches a rotated global key.
     """
-    if not config_stale(suite_dir) and not keys_stale(home, suite_dir):
+    if not config_stale(suite_dir) and not keys_stale(home, suite_dir, role_vars):
         return {"status": "fresh", "message": None}
     cfg_path = os.path.join(suite_dir, "superagent.yaml")
     mtime = os.path.getmtime(cfg_path) if os.path.isfile(cfg_path) else 0

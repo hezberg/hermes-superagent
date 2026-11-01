@@ -436,3 +436,21 @@ class TestSelectionInstall(InstallerCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("custom:lab", result.stdout)
         self.assertIn("not in your Hermes config", result.stdout)
+
+
+class TestEnvFormats(InstallerCase):
+    def test_export_and_quoted_global_key_is_found(self):
+        with open(os.path.join(self.home, ".env"), "w") as fh:
+            fh.write('export SUPERAGENT_MAIN_API_KEY="sk-quoted-value"\n')
+        self.install_filled()
+        path = os.path.join(self.home, "profiles", "sa-router", ".env")
+        with open(path) as fh:
+            self.assertIn("SUPERAGENT_MAIN_API_KEY=sk-quoted-value", fh.read())
+
+    def test_missing_key_message_never_asks_for_a_rerun(self):
+        with open(os.path.join(self.home, ".env"), "w") as fh:
+            fh.write("# no keys here\n")
+        self.write_suite_config()
+        result = self.run_install()
+        self.assertIn("Put SUPERAGENT_MAIN_API_KEY in ~/.hermes/.env", result.stdout)
+        self.assertNotIn("then re-run", result.stdout)

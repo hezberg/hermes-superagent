@@ -1,3 +1,15 @@
+## 0.7.1 — 2026-11-01
+
+- **The missing-key path no longer asks for a re-run** (field
+  report: the installer still printed "re-run the installer" after
+  the root fix). Three holes closed: (1) the next-step text now
+  says the .env line is the ONLY step — propagation is automatic;
+  (2) auto-reconcile now triggers on keys that were never synced
+  (absent at install time, added later), via a comparative check
+  over each role's resolved key variable, not only on recorded
+  baselines; (3) .env parsing accepts `export ` prefixes and
+  quoted values, which previously read as "missing".
+
 ## 0.7.0 — 2026-11-01
 
 - **The suite owns no providers or models at all.** Following the

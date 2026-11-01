@@ -39,7 +39,13 @@ def main():
         # profiles. A failure is spoken once per config version.
         from superagent.reconcile import maybe_reconcile
 
-        result = maybe_reconcile(home, os.path.join(home, "superagent"))
+        try:
+            role_vars = sa.resolved_role_key_vars(
+                sa.load_suite_config(), sa.load_default_config())
+        except Exception:
+            role_vars = {}
+        result = maybe_reconcile(home, os.path.join(home, "superagent"),
+                                 role_vars=role_vars)
         if result["status"] == "failed" and result.get("message"):
             print(result["message"])
     except Exception:

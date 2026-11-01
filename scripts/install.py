@@ -93,9 +93,15 @@ def _read_env_file(path):
         with open(path, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
+                if line.startswith("export "):
+                    line = line[len("export "):].lstrip()
                 if line and not line.startswith("#") and "=" in line:
                     name, value = line.split("=", 1)
-                    values[name.strip()] = value.strip()
+                    value = value.strip()
+                    if len(value) >= 2 and value[0] == value[-1] \
+                            and value[0] in "\"'":
+                        value = value[1:-1]
+                    values[name.strip()] = value
     except OSError:
         pass
     return values
@@ -756,8 +762,8 @@ def main(argv=None):
         next_steps.append("Point the reminder cron at a delivery platform: find it in "
                             "hermes cron list, then hermes cron edit <id> --deliver feishu")
     for var in missing_key_vars:
-        next_steps.append(f"Put {var} in ~/.hermes/.env, then re-run the installer - "
-                            "it syncs every profile's .env from there automatically.")
+        next_steps.append(f"Put {var} in ~/.hermes/.env — that is the only step; "
+                            "it syncs into every profile automatically, no re-run needed.")
     for step in next_steps:
         say(f"Next step: {step}")
     say("Finish with: hermes gateway restart - then give the Router a task.")

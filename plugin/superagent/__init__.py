@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.7.0"
+PLUGIN_VERSION = "0.7.1"
 
 
 # --------------------------------------------------------------------------
@@ -714,7 +714,13 @@ def _cli_handler(args):
         try:
             from .reconcile import maybe_reconcile
 
-            result = maybe_reconcile(hermes_home(), suite_dir(), interactive=True)
+            try:
+                role_vars = resolved_role_key_vars(
+                    load_suite_config(), load_default_config())
+            except Exception:
+                role_vars = {}
+            result = maybe_reconcile(hermes_home(), suite_dir(), interactive=True,
+                                     role_vars=role_vars)
             if result["status"] == "reconciled":
                 print("(Applied your superagent.yaml changes first.)")
             elif result["status"] == "failed" and result.get("message"):

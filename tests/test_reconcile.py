@@ -240,3 +240,39 @@ class TestKeysStale(unittest.TestCase):
         with open(os.path.join(self.suite, "state.json"), "w") as fh:
             json.dump({}, fh)
         self.assertFalse(reconcile.keys_stale(self.home, self.suite))
+
+
+class TestEnvParsingAndNeverSyncedKeys(unittest.TestCase):
+    def test_read_env_accepts_export_and_quotes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, ".env")
+            with open(path, "w") as fh:
+                fh.write('export A_KEY="v1"\nB_KEY=\'v2\'\nC_KEY=v3\n')
+            values = reconcile._read_env(path)
+            self.assertEqual(values, {"A_KEY": "v1", "B_KEY": "v2", "C_KEY": "v3"})
+
+    def test_never_synced_key_still_triggers_reconcile(self):
+        # No synced_keys baseline at all (the key did not exist at
+        # install time); the comparative role-vars check must still
+        # see that propagation is owed once the key appears globally.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = os.path.join(tmp, "home")
+            suite = os.path.join(home, "superagent")
+            src = os.path.join(suite, "src", "scripts")
+            os.makedirs(src)
+            os.makedirs(os.path.join(home, "profiles", "sa-router"))
+            with open(os.path.join(src, "install.py"), "w") as fh:
+                fh.write("# stub\n")
+            with open(os.path.join(suite, "superagent.yaml"), "w") as fh:
+                fh.write("{}\n")
+            with open(os.path.join(suite, "state.json"), "w") as fh:
+                json.dump({}, fh)
+            with open(os.path.join(home, ".env"), "w") as fh:
+                fh.write("MAIN_KEY=sk-new\n")
+            calls = []
+            result = reconcile.maybe_reconcile(
+                home, suite,
+                runner=lambda cmd: (calls.append(cmd), (0, ""))[1],
+                role_vars={"sa-router": "MAIN_KEY"})
+            self.assertEqual(result["status"], "reconciled")
+            self.assertEqual(len(calls), 1)
