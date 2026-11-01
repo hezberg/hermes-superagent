@@ -36,7 +36,7 @@ Missing `hermes` is a plan item, not a question: hermes-superagent is an
 add-on and does not install Hermes itself. Existing `sa-*` profiles mean
 an earlier install — read its manifest
 (`$HERMES_HOME/superagent/manifest.json`) and ask whether to upgrade in
-place (re-run `install.sh --force`) before changing anything.
+place (re-run the installer: `python3 scripts/install.py`) before changing anything.
 
 ## 2. Questions
 
@@ -80,7 +80,7 @@ operator step (entering keys). Ask for one confirmation.
 
 ## 4. Execute
 
-1. **Install.** Run `./install.sh` once. With no config anywhere it
+1. **Install.** Run `python3 scripts/install.py` once (or the guided wizard, `hermes superagent setup` once the plugin exists). With no config anywhere it
    writes the guided template to
    `~/.hermes/superagent/superagent.yaml` — that file is the only
    place user values ever live; the repo tree stays clean, so
@@ -117,9 +117,9 @@ operator step (entering keys). Ask for one confirmation.
    need a restart to pick it up — if you are running inside a
    gateway chat, warn the operator the conversation will drop and
    resume, and make the restart your last step.
-4. Install: `./install.sh` (same command as phase one — install,
+4. Install: `python3 scripts/install.py` (same command as phase one — install,
    upgrade, and repair are one idempotent convergence). It snapshots
-   the previous generation first (rollback: `./install.sh --rollback`),
+   the previous generation first (rollback: `python3 scripts/install.py --rollback`),
    and refuses nothing silently: a refusal names the validation
    problem; fix that, not around it.
 5. Verify: start the profile gateways per docs/CONFIG.md, then check
@@ -147,7 +147,7 @@ One short message:
   name — you own it.
 - Where to read more: README.md, then docs/CONFIG.md and
   docs/ARCHITECTURE.md.
-- How to undo everything: `./uninstall.sh`.
+- How to undo everything: `hermes superagent uninstall`.
 
 ## 6. Optional: chat entry (Feishu)
 

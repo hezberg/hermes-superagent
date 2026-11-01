@@ -19,12 +19,14 @@ import json
 import logging
 import os
 import sqlite3
+import subprocess
+import sys
 import time
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.11.1"
+PLUGIN_VERSION = "0.12.0"
 
 
 # --------------------------------------------------------------------------
@@ -722,6 +724,12 @@ def _cli_setup(parser):
     sub.add_parser("reminders", help="Show the reminder ledger for unclosed work")
     sub.add_parser("providers", help="List the providers/models in your Hermes config that roles can select")
     sub.add_parser("setup", help="Interactive setup wizard: topology, per-role models, Feishu entry, verified install")
+    un = sub.add_parser(
+        "uninstall", help="Remove the suite (your config, keys, sessions, memory and journal are kept unless --purge)")
+    un.add_argument("--purge", action="store_true",
+                    help="Also remove user data: config, journal, profile .env/sessions/memory")
+    un.add_argument("--yes", action="store_true",
+                    help="Skip the confirmation prompt")
     sub.add_parser("upgrade", help="Upgrade the suite in place (pulls its source, re-runs the installer)")
     set_model = sub.add_parser(
         "set-model", help="Set one profile's model in superagent.yaml and apply it now")
@@ -729,16 +737,86 @@ def _cli_setup(parser):
     set_model.add_argument("model", help="Model name, or 'inherit' to use the default profile's model")
 
 
+def _src_dir():
+    """Where the suite's source tree lives (for its scripts): the
+    self-maintained clone under the suite dir, or — when running
+    from a checkout — the repo this plugin file belongs to."""
+    src = os.path.join(hermes_home(), "superagent", "src")
+    if os.path.isfile(os.path.join(src, "scripts", "install.py")):
+        return src
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def _cmd_uninstall(args):
+    """Self-uninstall: run the suite's uninstaller as a subprocess
+    (it deletes this plugin's files — safe, the running code is
+    already in memory), then remove the reminder cron job the
+    note in the uninstaller used to leave to the operator."""
+    script = os.path.join(_src_dir(), "scripts", "uninstall.py")
+    if not os.path.isfile(script):
+        print("Cannot find the suite's uninstaller "
+              f"({script}). Remove ~/.hermes/plugins/superagent and "
+              "~/.hermes/superagent manually, plus the sa-* profiles "
+              "you no longer want.")
+        return 1
+    if not args.yes:
+        scope = ("EVERYTHING, including your config, journal and "
+                 "profile data (--purge)") if args.purge else (
+                 "the suite's managed files (your config, keys, "
+                 "sessions, memory and journal are kept)")
+        try:
+            answer = input(f"Uninstall hermes-superagent — removes {scope}. "
+                           "Continue? [y/N] ")
+        except EOFError:
+            answer = ""
+        if answer.strip().lower() not in ("y", "yes"):
+            print("Aborted — nothing removed.")
+            return 1
+    argv = [sys.executable, script, "--home", hermes_home()]
+    if args.purge:
+        argv.append("--purge")
+    rc = subprocess.run(argv).returncode
+    if rc != 0:
+        return rc
+    # The reminder tick's cron job: remove it here rather than
+    # leaving the operator a note (best-effort; the manual hint
+    # prints only when both removal verbs fail).
+    try:
+        out = subprocess.run(["hermes", "cron", "list"],
+                             capture_output=True, text=True).stdout
+        job_id = None
+        for line in out.splitlines():
+            if "superagent-reminder-tick" in line and line.split():
+                job_id = line.split()[0]
+                break
+        if job_id:
+            removed = False
+            for verb in ("remove", "delete"):
+                if subprocess.run(["hermes", "cron", verb, job_id],
+                                  capture_output=True).returncode == 0:
+                    removed = True
+                    break
+            if removed:
+                print(f"Removed the reminder cron job ({job_id}).")
+            else:
+                print("Note: delete the superagent-reminder-tick entry "
+                      "in `hermes cron list` — it points at a script "
+                      "that no longer exists.")
+    except Exception:
+        pass
+    print("Uninstalled. The `hermes superagent` command is gone with "
+          "the plugin; Hermes itself and your other profiles are untouched.")
+    return 0
+
+
 def _cli_handler(args):
     sub = getattr(args, "subcommand", None) or "status"
+    if sub == "uninstall":
+        return _cmd_uninstall(args)
     if sub == "setup":
         from .wizard import run_wizard
 
-        src = os.path.join(hermes_home(), "superagent", "src")
-        if not os.path.isfile(os.path.join(src, "scripts", "install.py")):
-            src = os.path.abspath(os.path.join(
-                os.path.dirname(__file__), "..", ".."))
-        return run_wizard(hermes_home(), src)
+        return run_wizard(hermes_home(), _src_dir())
     if sub not in ("upgrade", "set-model"):
         # A hand-edited config applies itself on the next command;
         # nobody should have to remember a separate apply step.

@@ -1,3 +1,22 @@
+## 0.12.0 — 2026-11-01
+
+- **`hermes superagent uninstall`** — the suite removes itself:
+  confirmation prompt (scope stated plainly; `--yes` to skip,
+  `--purge` for data too), runs the uninstaller as a subprocess
+  (deleting the running plugin's files is safe — the code is
+  already in memory), and removes the reminder cron job itself
+  instead of leaving the operator a note to do it. A declined
+  confirmation removes nothing (test-pinned).
+- **`install.sh` / `uninstall.sh` are gone.** They were one-line
+  shims over the Python engines, made redundant by the command
+  surface: setup wizard, upgrade, and now uninstall are all
+  `hermes superagent …`; checkout users call `scripts/install.py`
+  / `scripts/uninstall.py` directly. Every reference across
+  README, SETUP, INSTALL_PROMPT, templates and doctor text was
+  swept (historical CHANGELOG entries keep the old names — they
+  record what was true then). bootstrap.sh stays: it is the
+  first-contact door, before any plugin exists.
+
 ## 0.11.1 — 2026-11-01
 
 - **Wizard step 4: binding nothing is a failed step, not a

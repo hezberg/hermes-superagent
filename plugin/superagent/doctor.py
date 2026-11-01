@@ -39,7 +39,7 @@ def check_config_loaded(cfg, router_profile=None, worker_count=0):
         return [_finding(
             "error",
             "Suite config not loaded (~/.hermes/superagent/superagent.yaml is missing or unreadable).",
-            "Run the installer (bootstrap.sh, or ./install.sh in a checkout) to complete the install; edit only superagent.yaml, never the rendered profile files.",
+            "Run the installer (bootstrap.sh, or python3 scripts/install.py in a checkout) to complete the install; edit only superagent.yaml, never the rendered profile files.",
         )]
     return [_finding(
         "ok",
@@ -226,7 +226,7 @@ def check_plugin_enablement(enabled, disabled, plugin_present=True):
         return [_finding(
             "error",
             "The plugin directory is missing (~/.hermes/plugins/superagent) - the suite is not fully installed.",
-            "Re-run the installer (bootstrap.sh, or ./install.sh in a checkout).",
+            "Re-run the installer (bootstrap.sh, or python3 scripts/install.py in a checkout).",
         )]
     disabled = disabled or []
     if "superagent" in disabled:

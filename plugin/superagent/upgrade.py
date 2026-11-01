@@ -102,7 +102,7 @@ def run_upgrade(home, suite_dir, runner=None):
     if mode == "clone":
         code = runner(["git", "clone", url, path])
         if code != 0:
-            print(f"Cloning the source failed ({url}) - check the network and retry, or clone manually and run its install.sh.")
+            print(f"Cloning the source failed ({url}) - check the network and retry, or clone manually and run python3 scripts/install.py.")
             return code
     else:
         code = runner(["git", "-C", path, "pull", "--ff-only"])

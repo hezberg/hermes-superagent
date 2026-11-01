@@ -380,3 +380,65 @@ class TestBindNothingBound(WizardCase):
         self.assertEqual(rc, 1, "\n".join(ui.output))
         self.assertEqual(self.setup_calls, 1)
         self.assertTrue(any("NOT configured" in line for line in ui.output))
+
+
+class TestUninstallCommand(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = os.path.join(self.tmp.name, "home")
+        src = os.path.join(self.home, "superagent", "src", "scripts")
+        os.makedirs(src)
+        for name in ("install.py", "uninstall.py"):
+            with open(os.path.join(src, name), "w") as fh:
+                fh.write("# stub\n")
+        self.old_home = os.environ.get("HERMES_HOME")
+        os.environ["HERMES_HOME"] = self.home
+        self.calls = []
+
+    def tearDown(self):
+        if self.old_home is None:
+            os.environ.pop("HERMES_HOME", None)
+        else:
+            os.environ["HERMES_HOME"] = self.old_home
+        self.tmp.cleanup()
+
+    def fake_run(self, argv, **kw):
+        self.calls.append(list(argv))
+        class R:
+            returncode = 0
+            stdout = "9551201420f8  superagent-reminder-tick.py  every 10m\n"
+        return R()
+
+    def parse(self, argv):
+        import argparse
+        parser = argparse.ArgumentParser()
+        sa._cli_setup(parser)
+        return parser.parse_args(argv)
+
+    def test_yes_runs_uninstaller_and_removes_cron(self):
+        import subprocess as sp
+        orig = sp.run
+        sp.run = self.fake_run
+        try:
+            rc = sa._cli_handler(self.parse(["uninstall", "--yes", "--purge"]))
+        finally:
+            sp.run = orig
+        self.assertEqual(rc, 0)
+        uninstall_call = self.calls[0]
+        self.assertIn("uninstall.py", uninstall_call[1])
+        self.assertIn("--purge", uninstall_call)
+        self.assertTrue(any(c[:3] == ["hermes", "cron", "remove"]
+                            for c in self.calls))
+
+    def test_declined_confirmation_removes_nothing(self):
+        import subprocess as sp
+        import builtins
+        orig_run, orig_input = sp.run, builtins.input
+        sp.run = self.fake_run
+        builtins.input = lambda prompt="": "n"
+        try:
+            rc = sa._cli_handler(self.parse(["uninstall"]))
+        finally:
+            sp.run, builtins.input = orig_run, orig_input
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.calls, [])
