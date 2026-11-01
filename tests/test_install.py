@@ -202,6 +202,45 @@ class TestConverge(InstallerCase):
         self.assertEqual(state["version"], VERSION)
 
 
+class TestZeroConfigInheritance(InstallerCase):
+    """The operator's design rule: a working default Hermes profile
+    is enough. First install with a pristine suite template must
+    proceed in ONE run — roles inherit the default model block
+    verbatim, and the installer plants the key into each profile's
+    .env itself (no manual script, ever)."""
+
+    def write_default_config(self):
+        with open(os.path.join(self.home, "config.yaml"), "w") as fh:
+            yaml.safe_dump({
+                "model": {
+                    "provider": "custom",
+                    "default": "cn:deepseek-v4.1-flash",
+                    "base_url": "http://100.64.0.1:3001/v1",
+                    "api_key_env": "SUPERAGENT_MAIN_API_KEY",
+                }
+            }, fh)
+
+    def test_first_install_inherits_and_syncs_keys(self):
+        self.write_default_config()
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Inheriting the default profile's model", result.stdout)
+        router_dir = os.path.join(self.home, "profiles", "sa-router")
+        with open(os.path.join(router_dir, "config.yaml")) as fh:
+            rendered = yaml.safe_load(fh)
+        self.assertEqual(rendered["model"]["default"], "cn:deepseek-v4.1-flash")
+        self.assertEqual(rendered["model"]["provider"], "custom")
+        self.assertEqual(rendered["model"]["base_url"],
+                         "http://100.64.0.1:3001/v1")
+        with open(os.path.join(self.home, ".env")) as fh:
+            global_line = fh.read().strip()
+        with open(os.path.join(router_dir, ".env")) as fh:
+            self.assertIn(global_line, fh.read())
+        # Idempotent: nothing left to change on the second run.
+        result = self.run_install()
+        self.assertIn("Changed: nothing", result.stdout)
+
+
 class TestProfilesAreLivingDirs(InstallerCase):
     """Field failure, 2026-11-01: profile convergence replaced the
     whole directory tree, deleting each profile's .env (with the API
@@ -214,7 +253,7 @@ class TestProfilesAreLivingDirs(InstallerCase):
         router_dir = os.path.join(self.home, "profiles", "sa-router")
         env_path = os.path.join(router_dir, ".env")
         with open(env_path, "w") as fh:
-            fh.write("SUPERAGENT_MAIN_API_KEY=sk-live\n")
+            fh.write("SUPERAGENT_MAIN_API_KEY=sk-live\nOTHER_TOKEN=keep-me\n")
         session = os.path.join(router_dir, "sessions", "s1.json")
         os.makedirs(os.path.dirname(session))
         with open(session, "w") as fh:
@@ -228,7 +267,8 @@ class TestProfilesAreLivingDirs(InstallerCase):
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         with open(env_path) as fh:
-            self.assertEqual(fh.read(), "SUPERAGENT_MAIN_API_KEY=sk-live\n")
+            self.assertEqual(
+                fh.read(), "SUPERAGENT_MAIN_API_KEY=sk-live\nOTHER_TOKEN=keep-me\n")
         self.assertTrue(os.path.isfile(session))
         with open(os.path.join(router_dir, "config.yaml")) as fh:
             self.assertNotIn("allow_private_urls", fh.read())
@@ -248,7 +288,13 @@ class TestUninstall(InstallerCase):
         self.assertFalse(os.path.exists(
             os.path.join(self.home, "plugins", "superagent")))
         self.assertFalse(os.path.exists(
-            os.path.join(self.home, "profiles", "sa-router")))
+            os.path.join(self.home, "profiles", "sa-router", "config.yaml")))
+        # The profile dir itself may remain: key sync planted a .env
+        # there during install, and a profile's .env is the operator's
+        # property, never removed by uninstall.
+        router_dir = os.path.join(self.home, "profiles", "sa-router")
+        if os.path.isdir(router_dir):
+            self.assertEqual(os.listdir(router_dir), [".env"])
         self.assertTrue(os.path.isfile(self.suite_cfg_path()))
         self.assertTrue(os.path.isfile(journal))
         # state is gone, so a second uninstall has nothing to go on

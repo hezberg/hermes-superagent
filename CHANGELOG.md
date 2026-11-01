@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 — 2026-11-01
+
+- **Zero-config inheritance (the operator's design call).** The
+  suite no longer asks anyone to re-declare a provider they already
+  have. Any role left without a model inherits the default Hermes
+  profile's `model:` block verbatim at install time — provider
+  string included, so provider types beyond the suite's own
+  abstraction work too. Consequences:
+  - a first install on a machine whose default profile already
+    talks to a model completes in ONE run (previously: generate
+    template, stop, fill it in, run again);
+  - superagent.yaml is now an override file: fill in only what a
+    role should do differently from the default;
+  - **the installer syncs API keys itself**: each profile's `.env`
+    is filled (gaps only — an existing per-profile value is that
+    profile's own and is never overwritten) from `~/.hermes/.env`.
+    The manual copy-the-key-into-every-profile script is retired;
+    the operator's only key job is keeping `~/.hermes/.env` right.
+  Validation relaxes accordingly (model-less roles warn as
+  "will inherit", the verbatim provider is accepted).
+
 ## 0.5.7 — 2026-11-01
 
 - **Profiles are living directories; the installer no longer

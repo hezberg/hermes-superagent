@@ -80,6 +80,76 @@ def is_pristine(cfg):
     return True
 
 
+def _inheritance_available(home):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import inherit as inherit_mod
+
+    return inherit_mod.inheritance_available(home)
+
+
+def _read_env_file(path):
+    values = {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    name, value = line.split("=", 1)
+                    values[name.strip()] = value.strip()
+    except OSError:
+        pass
+    return values
+
+
+def sync_profile_keys(home, eff_cfg, dry_run, changes):
+    """Plant each profile's provider key into that profile's .env.
+
+    The value is sourced from the global ~/.hermes/.env (falling
+    back to the process environment) on the operator's own machine:
+    it is never printed, never leaves the box, and the files are
+    0600. This replaces the manual copy-the-key-into-every-profile
+    ritual — the installer owns it now. Returns key variable names
+    that have no value anywhere (the operator's one remaining job:
+    put them in ~/.hermes/.env).
+    """
+    providers = eff_cfg.get("providers") or {}
+    roles = [eff_cfg.get("router") or {}] + list(eff_cfg.get("workers") or [])
+    wanted = {}
+    for role in roles:
+        if not isinstance(role, dict):
+            continue
+        var = (providers.get(role.get("provider")) or {}).get("api_key_env")
+        if role.get("profile") and var:
+            wanted[role["profile"]] = var
+    if not wanted:
+        return []
+    global_env = _read_env_file(os.path.join(home, ".env"))
+    missing = []
+    for profile, var in sorted(wanted.items()):
+        path = os.path.join(home, "profiles", profile, ".env")
+        existing = _read_env_file(path).get(var)
+        if existing:
+            continue  # the profile already has a value; it is its own
+        value = global_env.get(var) or os.environ.get(var)
+        if not value:
+            if var not in missing:
+                missing.append(var)
+            continue
+        lines = []
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                lines = fh.read().splitlines()
+        out = [ln for ln in lines if not ln.startswith(var + "=")]
+        out.append(f"{var}={value}")
+        if not dry_run:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(out) + "\n")
+            os.chmod(path, 0o600)
+        changes.append(f"key sync ({profile})")
+    return missing
+
+
 def load_yaml(path):
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
@@ -297,6 +367,11 @@ def resolve_config(home, explicit, dry_run):
     if os.path.isfile(suite_cfg):
         cfg = load_yaml(suite_cfg)
         if is_pristine(cfg):
+            if _inheritance_available(home):
+                say("note: superagent.yaml is still the empty template, but your default "
+                    "Hermes profile already has a model - the suite will inherit it. "
+                    "Fill in superagent.yaml only to override a role's model.")
+                return suite_cfg, cfg, EXIT_OK
             # A pristine suite file is a leftover phase-one template.
             # A filled --config reseeds it; otherwise, stop politely.
             if explicit and os.path.isfile(explicit):
@@ -334,6 +409,11 @@ def resolve_config(home, explicit, dry_run):
         shutil.copy2(template, suite_cfg)
     say("First install: generating your config file:")
     say(f"  {suite_cfg}")
+    if _inheritance_available(home):
+        say("Your default Hermes profile already has a model, so there is nothing "
+            "you must fill in - the suite inherits it. Edit superagent.yaml only "
+            "to override a role's model, and re-run to apply.")
+        return suite_cfg, load_yaml(suite_cfg), EXIT_OK
     say("Fill in each provider's base_url and each role's model (the file explains "
         "itself), then re-run the same command. None of your config lives in the repo "
         "tree, so git pull can never conflict with it.")
@@ -396,18 +476,33 @@ def main(argv=None):
     if suite_cfg is None:
         return code
 
+    # ------------------------------------------------- inheritance
+    # Roles left model-less inherit the default profile's model
+    # block. The effective config is what gets validated, rendered,
+    # and key-synced; the file on disk stays the operator's override.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import inherit as inherit_mod
+
+    model_block = inherit_mod.default_model_block(home)
+    eff_cfg, inherited_roles = inherit_mod.apply_inheritance(cfg, model_block)
+    if inherited_roles:
+        say("Inheriting the default profile's model for "
+            + ", ".join(inherited_roles)
+            + f" ({model_block.get('provider') or 'custom'} / "
+            + f"{inherit_mod.block_model_name(model_block)}).")
+
     # ------------------------------------------------------------ validate
-    result = subprocess.run(
-        [sys.executable, os.path.join(REPO, "scripts", "validate_config.py"), suite_cfg],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
+    import validate_config as validate_mod
+
+    errors, _warnings = validate_mod.validate(eff_cfg)
+    if errors:
         say("Config validation failed - fix these (all in ~/.hermes/superagent/superagent.yaml):")
-        say((result.stdout or "") + (result.stderr or ""))
+        for err in errors:
+            say(f"ERROR: {err}")
         return EXIT_FAIL
 
-    router = (cfg.get("router") or {}).get("profile")
-    workers = [w.get("profile") for w in cfg.get("workers") or []]
+    router = (eff_cfg.get("router") or {}).get("profile")
+    workers = [w.get("profile") for w in eff_cfg.get("workers") or []]
     profiles = [p for p in [router] + workers if p]
     suite_dir = os.path.join(home, "superagent")
 
@@ -485,9 +580,12 @@ def main(argv=None):
         plugin_status = converge_tree(staged_plugin, plugin_dst, "plugin")
 
         rendered = os.path.join(tmp, "profiles")
+        eff_path = os.path.join(tmp, "effective.yaml")
+        with open(eff_path, "w", encoding="utf-8") as fh:
+            fh.write(inherit_mod.dump_simple_yaml(eff_cfg))
         r = subprocess.run(
             [sys.executable, os.path.join(REPO, "scripts", "render_profiles.py"),
-             "--config", suite_cfg, "--templates", os.path.join(REPO, "profiles"),
+             "--config", eff_path, "--templates", os.path.join(REPO, "profiles"),
              "--out", rendered],
             capture_output=True, text=True,
         )
@@ -518,6 +616,8 @@ def main(argv=None):
                            f"{kind}-superagent", "SKILL.md")
         with open(src, "rb") as fh:
             converge_file(fh.read(), dst, f"{kind} skill ({profile})")
+
+    missing_key_vars = sync_profile_keys(home, eff_cfg, args.dry_run, changes)
 
     tick_src = os.path.join(REPO, "scripts", "reminder_tick.py")
     with open(tick_src, encoding="utf-8") as fh:
@@ -610,6 +710,9 @@ def main(argv=None):
     if cron_created:
         next_steps.append("Point the reminder cron at a delivery platform: find it in "
                             "hermes cron list, then hermes cron edit <id> --deliver feishu")
+    for var in missing_key_vars:
+        next_steps.append(f"Put {var} in ~/.hermes/.env, then re-run the installer - "
+                            "it syncs every profile's .env from there automatically.")
     for step in next_steps:
         say(f"Next step: {step}")
     say("Finish with: hermes gateway restart - then give the Router a task.")

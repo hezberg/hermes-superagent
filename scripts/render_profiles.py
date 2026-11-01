@@ -42,6 +42,17 @@ HERMES_PROVIDER = {
 
 def provider_block(provider_cfg):
     """Return the dict of Hermes config values for one provider."""
+    provider_cfg = provider_cfg or {}
+    if provider_cfg.get("type") == "__verbatim__":
+        # Inherited from the default profile: copy its own values —
+        # Hermes knows provider types this abstraction does not.
+        block = provider_cfg.get("model_block") or {}
+        return {
+            "HERMES_PROVIDER": block.get("provider") or "custom",
+            "BASE_URL": block.get("base_url") or "",
+            "API_KEY_ENV": block.get("api_key_env") or block.get("key_env") or "",
+            "PROVIDER_TYPE": "__verbatim__",
+        }
     ptype = provider_cfg.get("type")
     return {
         "HERMES_PROVIDER": HERMES_PROVIDER.get(ptype, "custom"),

@@ -1,9 +1,16 @@
 # hermes-superagent — main configuration
 # ---------------------------------------------------------------------------
-# This is the ONLY file you need to edit. The installer renders Hermes
-# profile configs from it. API keys are NEVER stored here: each provider
-# names an environment variable (api_key_env); put the actual key in the
-# profile's .env file or your shell environment on the target machine.
+# This is the ONLY file you need to edit — and you may not need to edit
+# it at all. INHERITANCE: any role whose `model` is left empty inherits
+# your default Hermes profile's model setup (provider, model, base_url,
+# key variable) at install time. If your default profile already talks
+# to a model, install just works; fill values in only to give a role a
+# different model than your default.
+#
+# The installer renders Hermes profile configs from this file. API keys
+# are NEVER stored here: each provider names an environment variable
+# (api_key_env). Put the actual key in ~/.hermes/.env — the installer
+# syncs it into each profile's .env automatically.
 #
 # Provider types wired up out of the box:
 #   openai-compatible — any endpoint speaking the OpenAI API shape

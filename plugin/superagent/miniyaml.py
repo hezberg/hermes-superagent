@@ -66,6 +66,8 @@ def _scalar(text):
     text = text.strip()
     if text in ("", "~", "null", "Null", "NULL"):
         return None
+    if text == "{}":
+        return {}
     if text.startswith("[") and text.endswith("]"):
         inner = text[1:-1].strip()
         if not inner:

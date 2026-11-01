@@ -79,25 +79,29 @@ operator step (entering keys). Ask for one confirmation.
 
 ## 4. Execute
 
-1. **Generate the config (install phase one).** Run `./install.sh`
-   once. With no config anywhere it writes the guided template to
-   `~/.hermes/superagent/superagent.yaml` and stops — that file is
-   the only place user values ever live; the repo tree stays clean,
-   so `git pull` can never conflict over it.
-2. Write the answers into that file. Validate:
+1. **Install.** Run `./install.sh` once. With no config anywhere it
+   writes the guided template to
+   `~/.hermes/superagent/superagent.yaml` — that file is the only
+   place user values ever live; the repo tree stays clean, so
+   `git pull` can never conflict over it. **If the default Hermes
+   profile already has a model configured, the install proceeds in
+   the same run**: every role left model-less inherits the default
+   profile's model block verbatim. Only when there is nothing to
+   inherit does the installer stop and ask for values.
+2. Optionally write overrides into that file (a different model for
+   a role, extra providers). Validate:
    `python3 scripts/validate_config.py ~/.hermes/superagent/superagent.yaml`
-   — fix every ERROR before continuing; warnings about empty fields
-   mean an answer is still missing. (A filled staging file may still
-   be passed once via `--config` to seed the suite config; after
-   that it is ignored, by design.)
+   — fix every ERROR before continuing. (A filled staging file may
+   still be passed once via `--config` to seed the suite config;
+   after that it is ignored, by design.)
 3. **Operator step — the only one that must happen outside the
    agent.** Send one message with the exact line(s) for the operator
    to add to `~/.hermes/.env` in their own editor or terminal, one
-   per provider:
-   `<api_key_env 的变量名>=<key 本身>` (field-verified: the global
-   `.env` is read by every profile; per-profile files are not
-   needed). Never receive, print, or store the value yourself; ask
-   only for confirmation that the line exists. Then the gateways
+   per provider: `<api_key_env name>=<the key itself>`. Never
+   receive, print, or store the value yourself; ask only for
+   confirmation that the line exists. **The installer syncs the key
+   from the global `.env` into each profile's `.env` by itself** —
+   nobody copies keys between profiles by hand. Then the gateways
    need a restart to pick it up — if you are running inside a
    gateway chat, warn the operator the conversation will drop and
    resume, and make the restart your last step.

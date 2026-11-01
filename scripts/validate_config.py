@@ -46,13 +46,17 @@ def validate(cfg):
         err("version must be 1")
 
     providers = cfg.get("providers")
-    if not isinstance(providers, dict) or not providers:
-        err("providers: at least one provider is required")
+    if providers is None:
+        providers = {}
+    if not isinstance(providers, dict):
+        err("providers: must be a mapping")
         providers = {}
     for name, p in providers.items():
         if not isinstance(p, dict):
             err(f"providers.{name}: must be a mapping")
             continue
+        if p.get("type") == "__verbatim__":
+            continue  # inherited default-profile block; Hermes owns its shape
         if p.get("type") not in PROVIDER_TYPES:
             err(f"providers.{name}.type must be one of {sorted(PROVIDER_TYPES)}")
         if not p.get("api_key_env"):
@@ -65,9 +69,11 @@ def validate(cfg):
             err(f"{label}: must be a mapping")
             return
         prov = role.get("provider")
-        if prov not in providers:
+        if not prov and not role.get("model"):
+            warn(f"{label}: no provider/model — will inherit the default profile's model")
+        elif prov not in providers:
             err(f"{label}.provider references unknown provider {prov!r}")
-        if not role.get("model"):
+        if prov and not role.get("model"):
             warn(f"{label}.model is empty — fill it in before installing")
 
     check_role("router", cfg.get("router"))
