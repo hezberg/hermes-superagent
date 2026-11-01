@@ -47,6 +47,34 @@ def check_config_loaded(cfg, router_profile=None, worker_count=0):
     )]
 
 
+def presence_from_env_texts(texts, environ):
+    """{name: bool} — present means a NON-EMPTY value somewhere.
+
+    An empty line (`KEY=`) is a missing key with extra steps; it
+    read as "in place" through a full day of field failures because
+    presence used to count names. Values are never returned, only
+    the boolean.
+    """
+    present = {}
+    for name, value in (environ or {}).items():
+        if value:
+            present[name] = True
+    for text in texts or []:
+        for line in (text or "").splitlines():
+            line = line.strip()
+            if line.startswith("export "):
+                line = line[len("export "):].lstrip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, _, value = line.partition("=")
+            name = name.strip()
+            if name and value.strip().strip("\"'"):
+                present[name] = True
+            elif name and name not in present:
+                present[name] = False
+    return present
+
+
 def check_key_env(providers, env_present):
     """env_present: {env var name: bool} — presence only, never values."""
     out = []
@@ -58,8 +86,8 @@ def check_key_env(providers, env_present):
         elif not env_present.get(var):
             out.append(_finding(
                 "error",
-                f"Environment variable {var} is in neither the global .env nor any profile .env - the gateway would send requests with a placeholder key and be rejected.",
-                f"Put the key in ~/.hermes/.env (one line: {var}=<your key>), then hermes gateway restart.",
+                f"Environment variable {var} has no non-empty value in the global .env or any profile .env - the gateway would send requests with a placeholder key and be rejected.",
+                f"Put the key in ~/.hermes/.env (one line: {var}=<your key> — an empty line does not count), then hermes gateway restart.",
             ))
         else:
             out.append(_finding("ok", f"provider {name}: key variable {var} is in place."))

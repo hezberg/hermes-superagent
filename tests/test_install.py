@@ -472,3 +472,27 @@ class TestEnvFormats(InstallerCase):
         path = os.path.join(self.home, "profiles", "sa-router", ".env")
         with open(path) as fh:
             self.assertIn("SUPERAGENT_MAIN_API_KEY=sk-fullwidth", fh.read())
+
+
+class TestDayOne(InstallerCase):
+    """The out-of-box contract: a fresh machine whose default Hermes
+    profile already works installs in ONE run — no next-step about
+    keys, no hard errors, every profile holding the key."""
+
+    def test_fresh_machine_one_run(self):
+        with open(os.path.join(self.home, "config.yaml"), "w") as fh:
+            yaml.safe_dump({
+                "model": {"provider": "custom", "default": "base-model",
+                          "base_url": "http://100.64.0.1:3001/v1",
+                          "api_key_env": "SUPERAGENT_MAIN_API_KEY"},
+            }, fh)
+        # No suite config anywhere — and because the default profile
+        # already has a model, the FIRST run completes the install.
+        second = self.run_install()
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertNotIn("no line for SUPERAGENT_MAIN_API_KEY", second.stdout)
+        self.assertNotIn("WARNING: postflight", second.stdout)
+        self.assertIn("Finish with: hermes gateway restart", second.stdout)
+        for profile in ("sa-router", "sa-worker-general", "sa-worker-research"):
+            with open(os.path.join(self.home, "profiles", profile, ".env")) as fh:
+                self.assertIn("SUPERAGENT_MAIN_API_KEY=", fh.read())

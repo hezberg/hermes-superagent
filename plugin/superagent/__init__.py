@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.7.2"
+PLUGIN_VERSION = "0.7.3"
 
 
 # --------------------------------------------------------------------------
@@ -479,19 +479,19 @@ def _doctor_findings():
             )
     findings += doc.check_smart_quotes(profile_texts)
 
-    present_names = set(os.environ)
     env_files = [os.path.join(hermes_home(), ".env")] + [
         os.path.join(hermes_home(), "profiles", n, ".env") for n in names if n
     ]
+    env_texts = []
     for path in env_files:
         try:
             with open(path, encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        present_names.add(line.split("=", 1)[0].strip())
+                env_texts.append(fh.read())
         except OSError:
             pass
+    # Presence means a non-empty VALUE (see doctor.presence_from_env_texts):
+    # a bare `KEY=` line is a missing key, not a present one.
+    presence = doc.presence_from_env_texts(env_texts, os.environ)
     # Key variables follow each role's selection (a named Hermes
     # provider, the default model block, or a legacy suite provider)
     # — the suite declares none of its own.
@@ -506,7 +506,7 @@ def _doctor_findings():
         if var:
             label = str(role.get("provider") or "").strip() or "default profile"
             providers_view[label] = {"api_key_env": var}
-    env_present = {v: v in present_names for v in role_vars.values()}
+    env_present = {v: presence.get(v, False) for v in role_vars.values()}
     findings += doc.check_key_env(providers_view, env_present)
     # Convergence: a profile copy that differs from the global .env
     # is a stale key still being sent. Compare values here; doctor

@@ -1,3 +1,18 @@
+## 0.7.3 — 2026-11-01
+
+- **Out-of-box audit.** The operator's standard: a fresh machine
+  must reach the working state with no nursing. Closed in this
+  pass: doctor (and the installer's postflight, which reuses it)
+  counted a key as present when its NAME existed — an empty `KEY=`
+  line read as "in place", the same false green as the field
+  failure. Presence now means a non-empty value in the global
+  .env, a profile .env, or the process environment. A day-one
+  end-to-end test (fresh home, default profile with a model, key
+  only in the global .env) pins the contract: one run, inherited,
+  keys synced, no key next-steps, no hard errors.
+- README quickstart now includes the gateway restart it
+  previously glossed over.
+
 ## 0.7.2 — 2026-11-01
 
 - **Missing-key output diagnoses instead of asserting.** "Put the

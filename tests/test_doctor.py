@@ -156,3 +156,23 @@ class TestKeyConvergence(unittest.TestCase):
 
     def test_converged_is_silent(self):
         self.assertEqual(doc.check_key_convergence({}), [])
+
+
+class TestPresenceMeansNonEmpty(unittest.TestCase):
+    def test_empty_line_is_not_presence(self):
+        out = doc.presence_from_env_texts(["KEY=\n"], {})
+        self.assertEqual(out, {"KEY": False})
+
+    def test_value_in_any_file_wins(self):
+        out = doc.presence_from_env_texts(["KEY=\n", "KEY=sk-x\n"], {})
+        self.assertTrue(out["KEY"])
+        out = doc.presence_from_env_texts(["KEY=sk-x\n", "KEY=\n"], {})
+        self.assertTrue(out["KEY"])
+
+    def test_export_and_quotes_count(self):
+        out = doc.presence_from_env_texts(['export KEY="sk-x"\n'], {})
+        self.assertTrue(out["KEY"])
+
+    def test_environ_counts_only_non_empty(self):
+        out = doc.presence_from_env_texts([], {"A": "1", "B": ""})
+        self.assertEqual(out, {"A": True})

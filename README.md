@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.7.2.** The dispatch chain is verified end-to-end on a
+> **Status: v0.7.3.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). On top of the v0.1 skeleton (layout,
 > configuration system, plugin registration, profile rendering,
@@ -47,12 +47,13 @@ curl -fsSL https://raw.githubusercontent.com/hezberg/hermes-superagent/main/boot
 The bootstrap keeps the suite's source inside Hermes' own directory
 (`~/.hermes/superagent/src` — the plugin, profiles, config, and
 history all live under `~/.hermes/` too) and runs the installer. If
-your default Hermes profile already talks to a model, that is all:
-roles inherit its model setup, and the installer syncs the API key
-into each profile itself. Edit `~/.hermes/superagent/superagent.yaml`
-only to give a role a *different* model than your default. Upgrades
-are simply `hermes superagent upgrade` — no checkout to remember,
-anywhere.
+your default Hermes profile already talks to a model, that is
+nearly all: roles inherit its model setup, and the installer syncs
+the API key into each profile itself. One `hermes gateway restart`
+and you can talk to the Router (`hermes --profile sa-router`).
+Edit `~/.hermes/superagent/superagent.yaml` only to select a
+*different* provider or model for a role. Upgrades are simply
+`hermes superagent upgrade` — no checkout to remember, anywhere.
 
 ### Or: let Hermes install it for you
 
