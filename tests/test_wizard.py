@@ -114,10 +114,11 @@ class WizardCase(unittest.TestCase):
             return 0, "9551201420f8  superagent-reminder-tick.py  every 10m\n"
         return 0, ""
 
-    def run_wizard(self, answers, secret=""):
+    def run_wizard(self, answers, secret="", fetcher=None):
         ui = ScriptedPrompter(answers, secret=secret)
-        rc = wizard.run_wizard(self.home, REPO, prompter=ui,
-                               runner=self.runner, environ={})
+        rc = wizard.run_wizard(
+            self.home, REPO, prompter=ui, runner=self.runner, environ={},
+            fetcher=fetcher if fetcher is not None else (lambda url, key: None))
         return rc, ui
 
 
@@ -270,3 +271,73 @@ class TestBindPathDuplicates(WizardCase):
         cfg = sa._yaml_load(open(os.path.join(
             self.home, "superagent", "superagent.yaml")).read())
         self.assertEqual(cfg["entry"]["platform"], "")
+
+
+class TestModelListFromProvider(WizardCase):
+    def setUp(self):
+        super().setUp()
+        with open(os.path.join(self.home, "config.yaml"), "w") as fh:
+            fh.write(
+                "model:\n  provider: custom\n  default: base-model\n"
+                "  base_url: http://100.64.0.1:3001/v1\n"
+                "  api_key_env: SUPERAGENT_MAIN_API_KEY\n"
+                "custom_providers:\n"
+                "  - name: workbuddy\n"
+                "    base_url: http://100.64.0.1:3001/v1\n"
+                "    model: cn:deepseek-v4.1-flash\n"
+                "    api_key_env: WB_KEY\n")
+
+    def fetcher(self, url, key):
+        self.assertEqual(url, "http://100.64.0.1:3001/v1")
+        return ["glm-5.3", "cn:deepseek-v4.1-flash", "deepseek-v4.1-pro"]
+
+    def test_pick_from_fetched_list(self):
+        # router: provider workbuddy (2), model list pick 1 (glm-5.3);
+        # worker inherits; no entry.
+        rc, ui = self.run_wizard(["1", "2", "1", "1", "1"],
+                                 fetcher=self.fetcher)
+        self.assertEqual(rc, 0, "\n".join(ui.output))
+        cfg = sa._yaml_load(open(os.path.join(
+            self.home, "superagent", "superagent.yaml")).read())
+        self.assertEqual(cfg["router"]["provider"], "workbuddy")
+        self.assertEqual(cfg["router"]["model"], "glm-5.3")
+        self.assertEqual(ui.answers, [])
+
+
+class TestTransactionalWizard(WizardCase):
+    def test_interrupt_at_secret_entry_changes_nothing(self):
+        def boom(prompt=""):
+            raise KeyboardInterrupt
+        ui = wizard.Prompter(input_fn=None, getpass_fn=boom,
+                             out=lambda m: None, style=wizard.Style(enabled=False))
+        answers = iter(["1", "1", "1", "2", "cli_newapp999"])
+        ui._input = lambda prompt="": next(answers)
+        rc = wizard.run_wizard(self.home, REPO, prompter=ui,
+                               runner=self.runner, environ={},
+                               fetcher=lambda url, key: None)
+        self.assertEqual(rc, 130)
+        self.assertFalse(os.path.exists(os.path.join(
+            self.home, "profiles", "sa-router", ".env")))
+        self.assertFalse(os.path.exists(os.path.join(
+            self.home, "superagent", "superagent.yaml")))
+
+    def test_interrupt_restores_bind_path_env(self):
+        router_env = os.path.join(self.home, "profiles", "sa-router", ".env")
+        os.makedirs(os.path.dirname(router_env))
+        with open(router_env, "w") as fh:
+            fh.write("PREEXISTING=1\n")
+
+        def runner(argv, env=None, interactive=False):
+            if "gateway" in argv and "setup" in argv:
+                with open(router_env, "a") as fh:
+                    fh.write("FEISHU_APP_ID=cli_bound\n")
+                raise KeyboardInterrupt  # user bails mid-setup return
+            return self.runner(argv, env=env, interactive=interactive)
+
+        ui = ScriptedPrompter(["1", "1", "1", "3"])
+        rc = wizard.run_wizard(self.home, REPO, prompter=ui,
+                               runner=runner, environ={},
+                               fetcher=lambda url, key: None)
+        self.assertEqual(rc, 130)
+        with open(router_env) as fh:
+            self.assertEqual(fh.read(), "PREEXISTING=1\n")

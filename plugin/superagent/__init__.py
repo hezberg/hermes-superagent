@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.10.3"
+PLUGIN_VERSION = "0.11.0"
 
 
 # --------------------------------------------------------------------------
@@ -101,6 +101,7 @@ def hermes_provider_menu(default_cfg):
             "select": block.get("provider") or "custom",
             "model": block.get("default") or block.get("model") or "",
             "key_var": block.get("api_key_env") or block.get("key_env") or "",
+            "base_url": block.get("base_url") or "",
             "detail": "default profile model: "
                       + str(block.get("default") or block.get("model") or "?")
                       + (f", key var {block.get('api_key_env') or block.get('key_env')}"
@@ -114,6 +115,7 @@ def hermes_provider_menu(default_cfg):
                 items.append({"select": entry.get("name") or key,
                               "model": entry.get("default") or entry.get("model") or "",
                               "key_var": entry.get("api_key_env") or entry.get("key_env") or "",
+                              "base_url": entry.get("base_url") or "",
                               "detail": _entry_detail(entry), "default": False})
     custom = (default_cfg or {}).get("custom_providers")
     if isinstance(custom, list):
@@ -122,6 +124,7 @@ def hermes_provider_menu(default_cfg):
                 items.append({"select": entry["name"],
                               "model": entry.get("default") or entry.get("model") or "",
                               "key_var": entry.get("api_key_env") or entry.get("key_env") or "",
+                              "base_url": entry.get("base_url") or "",
                               "detail": _entry_detail(entry), "default": False})
     return items
 

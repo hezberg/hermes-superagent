@@ -167,6 +167,31 @@ def _default_runner(argv, env=None, interactive=False):
 # Pure checks and text surgery (unit-tested without a terminal)
 # ---------------------------------------------------------------------------
 
+def fetch_provider_models(base_url, api_key="", timeout=6):
+    """The model ids a provider endpoint serves (GET <base>/models,
+    OpenAI-shaped). None on ANY failure — the wizard then falls back
+    to a typed prompt; a dead endpoint must not dead-end the setup."""
+    import json
+    import urllib.request
+
+    if not base_url:
+        return None
+    url = base_url.rstrip("/") + "/models"
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    if api_key:
+        req.add_header("Authorization", f"Bearer {api_key}")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        return None
+    ids = [str(d["id"]) for d in data if isinstance(d, dict) and d.get("id")]
+    return ids or None
+
+
 def _env_value(text, var):
     for line in (text or "").splitlines():
         line = line.strip()
@@ -356,13 +381,58 @@ def _read(path):
         return ""
 
 
-def run_wizard(home, repo, prompter=None, runner=None, environ=None):
-    from . import _yaml_load, hermes_provider_menu, load_suite_config
-    from .reconcile import set_role_selection
+def _restore_env(state):
+    """Undo any pre-commit writes to the router profile's .env
+    (only the bind path can produce them, via Hermes' own setup)."""
+    path = state.get("router_env")
+    if not path:
+        return
+    try:
+        if state.get("snapshot") is None:
+            if os.path.isfile(path):
+                os.remove(path)
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as fh:
+                fh.write(state["snapshot"])
+    except OSError:
+        pass
 
+
+def run_wizard(home, repo, prompter=None, runner=None, environ=None,
+               fetcher=None):
+    """Public entry — transactional wrapper around the flow.
+
+    The wizard's contract: until the single commit point (writing
+    the config, just before the installer runs), NOTHING is
+    modified. Choices live in memory; Feishu credentials are staged
+    in memory; the one flow that must touch disk early (Hermes' own
+    setup writing the router profile's .env during binding) is
+    covered by a snapshot taken before it can run. An interrupt
+    before the commit restores the snapshot and reports that
+    nothing changed; an interrupt after it is the installer's
+    domain (it keeps its own snapshots and --rollback)."""
     ui = prompter or Prompter()
     run = runner or _default_runner
     environ = environ if environ is not None else dict(os.environ)
+    state = {"committed": False, "snapshot": None, "router_env": None}
+    try:
+        return _run_wizard(home, repo, ui, run, environ, state,
+                           fetcher or fetch_provider_models)
+    except KeyboardInterrupt:
+        if not state.get("committed"):
+            _restore_env(state)
+            ui.error("Setup interrupted — nothing was changed.")
+            return 130
+        ui.warn("Setup interrupted during install. The installer keeps")
+        ui.warn("snapshots of the prior state; restore with install.py --rollback.")
+        return 130
+
+
+def _run_wizard(home, repo, ui, run, environ, state, fetcher):
+    from . import _yaml_load, hermes_provider_menu, load_suite_config
+    from .reconcile import set_role_selection
+
     env = {"HERMES_HOME": home}
     os.environ["HERMES_HOME"] = home  # package helpers resolve home from env
     say = ui.say
@@ -419,6 +489,17 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
         say("Found an existing superagent config — your current choices")
         say("are the defaults; change what you like, keep the rest.")
 
+    # Transaction snapshot: from here to the commit point the only
+    # disk writes possible are to the router profile's .env (the
+    # bind path). Snapshot its bytes now so an interrupt can put
+    # them back exactly.
+    state["router_env"] = os.path.join(home, "profiles", router_profile, ".env")
+    try:
+        with open(state["router_env"], "rb") as fh:
+            state["snapshot"] = fh.read()
+    except OSError:
+        state["snapshot"] = None
+
     # -- 3. Topology ------------------------------------------------------
     topo_default = 0
     if set(existing_workers) == {"general", "research", "deep"}:
@@ -456,6 +537,7 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
         f"{item['select']} — {item['detail']}" for item in menu
     ]
     ui.header(3, "Models")
+    global_env_text = _read(os.path.join(home, ".env"))
     roles = [("Router", router_profile, "router")]
     roles += [(f"Worker {n}", WORKER_PRESETS[n]["profile"], n) for n in worker_names]
     selections = {}
@@ -466,7 +548,28 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
             continue
         item = menu[idx - 1]
         provider = item["select"]
-        if item.get("model"):
+        # The operator chose a provider; the models come from the
+        # provider itself when it answers — a list to pick from,
+        # not a name to type from memory. Any failure (endpoint
+        # down, no key, unexpected shape) falls back to the typed
+        # prompt with the entry's model prefilled.
+        key = ""
+        if item.get("key_var"):
+            key = _env_value(global_env_text, item["key_var"]) or environ.get(
+                item["key_var"], "")
+        models = fetcher(item.get("base_url") or "", key) \
+            if item.get("base_url") else None
+        if models:
+            labels = list(models) + ["(type a different model name)"]
+            default_idx = models.index(item["model"]) \
+                if item.get("model") in models else 0
+            pick = ui.choose(f"Model for {profile} (from {provider}):",
+                             labels, default=default_idx)
+            if pick < len(models):
+                model = models[pick]
+            else:
+                model = ui.ask(f"Model for {profile}", item.get("model") or "")
+        elif item.get("model"):
             model = ui.ask(
                 f"Model for {profile} (Enter keeps it, or type another)",
                 item["model"])
@@ -493,6 +596,7 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
     # -- 5. Feishu entry ---------------------------------------------------
     entry_platform = ""
     entry_failed = ""
+    pending_feishu = None  # staged credentials, written only at commit
     delivery = ""
     ui.header(4, "Chat entry")
     feishu_choice = ui.choose("Talk to the Router from chat?", [
@@ -503,7 +607,7 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
     if feishu_choice in (1, 2):
         entry_platform = "feishu"
         delivery = "feishu"
-        router_env = os.path.join(home, "profiles", router_profile, ".env")
+        router_env = state["router_env"]
         if feishu_choice == 1:
             while True:
                 app_id = ui.ask("Feishu App ID (of the NEW app)")
@@ -533,9 +637,10 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
                     delivery = ""
                     entry_failed = "no App Secret entered"
                     break
-                upsert_env_lines(router_env, {
-                    "FEISHU_APP_ID": app_id, "FEISHU_APP_SECRET": secret})
-                ui.ok("Credentials stored in the router profile's .env.")
+                pending_feishu = {
+                    "FEISHU_APP_ID": app_id, "FEISHU_APP_SECRET": secret}
+                ui.ok("Credentials noted — they are written to the router")
+                say("profile's .env only when the setup commits (step 5).")
                 break
         else:
             # Bind through Hermes' own setup, then apply the SAME
@@ -589,7 +694,12 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
                 entry_failed = f"bound app {bound_id} duplicates another profile"
                 break
 
-    # -- 6. Write the config ----------------------------------------------
+    # -- 6. Commit + write the config --------------------------------------
+    # THE commit point: everything before this line was decided in
+    # memory. From here on, changes are the installation itself.
+    state["committed"] = True
+    if pending_feishu:
+        upsert_env_lines(router_env, pending_feishu)
     ui.header(5, "Install")
     base_text = existing_text or _read(os.path.join(repo, "config", "superagent.yaml"))
     text = _replace_section(base_text, "workers", workers_section(worker_names))

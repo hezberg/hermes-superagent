@@ -1,3 +1,26 @@
+## 0.11.0 — 2026-11-01
+
+- **The wizard is transactional.** Until its single commit point
+  (writing the config, immediately before the installer runs),
+  nothing on disk changes: topology, model and entry decisions
+  live in memory, and pasted Feishu credentials are staged in
+  memory too — earlier versions wrote them into the router
+  profile's .env mid-flow, and wrote the config before the
+  install, so an abandoned setup still modified files. The one
+  flow that must touch disk early (Hermes' own setup writing the
+  profile .env while binding) is covered by a snapshot taken
+  beforehand: Ctrl-C / interrupt before the commit restores the
+  .env byte-for-byte and reports "nothing was changed"; after
+  the commit, the installer's own snapshots and --rollback own
+  recovery. Pinned by interrupt tests on both Feishu paths.
+- **Model choice comes from the provider.** After a provider is
+  chosen, the wizard queries its <base_url>/models with the
+  provider's key and offers the served model ids as a menu
+  (the entry's own model preselected), plus a "type a different
+  name" escape. Any fetch failure falls back to the typed prompt
+  with the entry's model prefilled — a dead endpoint never
+  dead-ends the setup.
+
 ## 0.10.3 — 2026-11-01
 
 - **Wizard: choosing a provider keeps the right to choose the
