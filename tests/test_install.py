@@ -501,3 +501,33 @@ class TestDayOne(InstallerCase):
         for profile in ("sa-worker-research", "sa-worker-deep"):
             self.assertFalse(os.path.exists(
                 os.path.join(self.home, "profiles", profile)))
+
+
+class TestProfileConfigCoOwnership(InstallerCase):
+    """Hermes' own setup flows write top-level sections into a
+    profile's config.yaml (platform credentials). A reconcile must
+    preserve them — overwriting the file would unwire a messaging
+    platform the operator connected to that profile."""
+
+    def install_filled(self):
+        suite_dir = os.path.join(self.home, "superagent")
+        os.makedirs(suite_dir, exist_ok=True)
+        with open(os.path.join(suite_dir, "superagent.yaml"), "w") as fh:
+            yaml.safe_dump(FILLED, fh)
+        first = self.run_install()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+
+    def test_platform_section_survives_reconcile(self):
+        self.install_filled()
+        cfg_path = os.path.join(
+            self.home, "profiles", "sa-router", "config.yaml")
+        with open(cfg_path, "a") as fh:
+            fh.write("platforms:\n  feishu:\n    extra:\n      app_id: cli_test\n")
+        third = self.run_install()
+        self.assertEqual(third.returncode, 0, third.stdout + third.stderr)
+        with open(cfg_path) as fh:
+            text = fh.read()
+        self.assertIn("app_id: cli_test", text)
+        self.assertIn("model:", text)  # the render's own keys intact
+        fourth = self.run_install()
+        self.assertIn("Changed: nothing", fourth.stdout)  # idempotent

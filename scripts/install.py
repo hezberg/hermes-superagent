@@ -632,18 +632,38 @@ def main(argv=None):
         """
         staged = tree_hashes(src_dir, skip_topdirs=skip_topdirs)
         changed = False
+        render_mod = None
         for rel, digest in staged.items():
             target = os.path.join(dst, rel)
-            current = None
+            current_bytes = None
             if os.path.isfile(target):
                 with open(target, "rb") as fh:
-                    current = hashlib.sha256(fh.read()).hexdigest()
+                    current_bytes = fh.read()
+            with open(os.path.join(src_dir, rel), "rb") as fh:
+                data = fh.read()
+            if rel == "config.yaml" and current_bytes is not None:
+                # A profile's config.yaml is co-owned: Hermes' setup
+                # flows write their own top-level sections into it
+                # (messaging platform credentials, operator tweaks).
+                # The render owns only its keys; sections it does not
+                # know are preserved (see render_profiles).
+                if render_mod is None:
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location(
+                        "sa_render_profiles",
+                        os.path.join(REPO, "scripts", "render_profiles.py"))
+                    render_mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(render_mod)
+                data = render_mod.merge_preserving_sections(
+                    data.decode("utf-8"), current_bytes.decode("utf-8")
+                ).encode("utf-8")
+                digest = hashlib.sha256(data).hexdigest()
+            current = (hashlib.sha256(current_bytes).hexdigest()
+                       if current_bytes is not None else None)
             if current != digest:
                 changed = True
                 if not args.dry_run:
                     os.makedirs(os.path.dirname(target), exist_ok=True)
-                    with open(os.path.join(src_dir, rel), "rb") as fh:
-                        data = fh.read()
                     with open(target, "wb") as fh:
                         fh.write(data)
         if changed:

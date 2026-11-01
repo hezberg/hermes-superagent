@@ -151,6 +151,62 @@ def security_block(cfg):
     return ""
 
 
+def top_level_sections(text):
+    """[(key-or-None, section_text)] split at column-0 `key:` lines.
+
+    A preamble (comments/blank lines before the first key) comes back
+    with key None. Text-level on purpose: the renderer's consumers
+    (installer, doctor) cannot assume a YAML library.
+    """
+    sections = []
+    key, buf = None, []
+    for line in (text or "").splitlines(keepends=True):
+        stripped = line.rstrip("\n")
+        is_key = (
+            stripped
+            and not stripped[0].isspace()
+            and not stripped.startswith("#")
+            and ":" in stripped
+            and not stripped.startswith("-")
+        )
+        if is_key:
+            if buf:
+                sections.append((key, "".join(buf)))
+            key, buf = stripped.split(":", 1)[0].strip(), [line]
+        else:
+            buf.append(line)
+    if buf:
+        sections.append((key, "".join(buf)))
+    return sections
+
+
+def merge_preserving_sections(rendered, existing,
+                              owned_extra=("model", "platform_toolsets", "security")):
+    """Rendered content wins; top-level sections that exist ONLY in
+    the on-disk file are carried over.
+
+    A profile's config.yaml is co-owned: the suite renders its keys,
+    but Hermes' own setup flows (gateway platform credentials,
+    operator tweaks) write others into the same file. Overwriting
+    the whole file would delete a wired-up messaging platform on
+    the next reconcile — the merge is what lets both owners win.
+    Sections the suite OWNS are never preserved from disk, even
+    when this render omits them (e.g. the security block vanishing
+    is exactly how an operator turns it off).
+    """
+    if not existing:
+        return rendered
+    owned = {k for k, _ in top_level_sections(rendered) if k} | set(owned_extra)
+    extra = [t for k, t in top_level_sections(existing)
+             if k and k not in owned]
+    if not extra:
+        return rendered
+    out = rendered if rendered.endswith("\n") else rendered + "\n"
+    for section in extra:
+        out += section if section.endswith("\n") else section + "\n"
+    return out
+
+
 def render_all(cfg, templates_dir, out_dir):
     """Render every profile. Returns the list of profile dirs written."""
     providers = cfg.get("providers") or {}

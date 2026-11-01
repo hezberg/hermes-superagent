@@ -1,3 +1,16 @@
+## 0.8.1 — 2026-11-01
+
+- **Profile config.yaml is co-owned now.** Hermes' own setup
+  flows (e.g. wiring a messaging platform to a profile) write
+  top-level sections into a profile's config.yaml; the installer's
+  per-file convergence used to overwrite the file with the render,
+  which would silently unwire such a platform on the next
+  reconcile. Convergence now merges: rendered keys win, sections
+  the suite owns are never resurrected from disk, and foreign
+  sections (platforms:, gateway:, …) are preserved verbatim.
+  Pinned by a test that adds a platforms.feishu section and
+  reconciles twice (preserved, and the second run is a no-op).
+
 ## 0.8.0 — 2026-11-01
 
 - **One worker by default.** The general/research/deep trio was a
