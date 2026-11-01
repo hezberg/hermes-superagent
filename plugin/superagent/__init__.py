@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.5.3"
+PLUGIN_VERSION = "0.5.4"
 
 
 # --------------------------------------------------------------------------
@@ -43,14 +43,27 @@ def board_path():
     return os.path.join(hermes_home(), "kanban.db")
 
 
+def _yaml_load(text):
+    """Parse YAML text. PyYAML when importable; otherwise the bundled
+    subset parser (miniyaml) — Hermes' bundled CLI python ships no
+    PyYAML, and silently reading every config as empty is how doctor
+    spent days reporting a valid config as 'not loaded'."""
+    try:
+        import yaml
+
+        return yaml.safe_load(text) or {}
+    except ImportError:
+        from .miniyaml import parse
+
+        return parse(text) or {}
+
+
 def load_suite_config():
     """Read the installed superagent.yaml copy, or {} if not installed."""
     path = os.path.join(suite_dir(), "superagent.yaml")
     try:
-        import yaml
-
         with open(path, "r", encoding="utf-8") as fh:
-            return yaml.safe_load(fh) or {}
+            return _yaml_load(fh.read())
     except Exception:
         return {}
 
@@ -353,9 +366,7 @@ def _doctor_findings():
         parsed = {}
         if text:
             try:
-                import yaml
-
-                parsed = yaml.safe_load(text) or {}
+                parsed = _yaml_load(text)
             except Exception:
                 parsed = {}
         profile_cfgs[name] = parsed
@@ -410,12 +421,10 @@ def _doctor_findings():
     )
     enabled_list, disabled_list = None, []
     try:
-        import yaml
-
         with open(
             os.path.join(hermes_home(), "config.yaml"), encoding="utf-8"
         ) as fh:
-            default_cfg = yaml.safe_load(fh) or {}
+            default_cfg = _yaml_load(fh.read())
         plugins_cfg = default_cfg.get("plugins") or {}
         if isinstance(plugins_cfg.get("enabled"), list):
             enabled_list = plugins_cfg["enabled"]

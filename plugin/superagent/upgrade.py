@@ -16,10 +16,38 @@ this Hermes home: one convergence, same as a manual upgrade.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 
 DEFAULT_REPO_URL = "https://github.com/hezberg/hermes-superagent.git"
+
+
+def pick_python(probe=None):
+    """An interpreter that can run the installer (it needs PyYAML).
+
+    The interpreter running this plugin may be Hermes' bundled
+    python, which ships no PyYAML (field failure, 2026-11-01: the
+    upgrade pulled fine, then the installer died on the import).
+    Probe candidates and use the first that imports yaml.
+    """
+    if probe is None:
+        def probe(exe):
+            try:
+                return subprocess.run(
+                    [exe, "-c", "import yaml"],
+                    capture_output=True, timeout=15,
+                ).returncode == 0
+            except Exception:
+                return False
+
+    seen = set()
+    for cand in (sys.executable, shutil.which("python3"), "/usr/bin/python3"):
+        if cand and cand not in seen:
+            seen.add(cand)
+            if probe(cand):
+                return cand
+    return sys.executable
 
 
 def read_state(suite_dir):
@@ -76,4 +104,4 @@ def run_upgrade(home, suite_dir, runner=None):
                   "stops here; the current install is untouched. Fix it and re-run hermes superagent upgrade.")
             return code
     installer = os.path.join(path, "scripts", "install.py")
-    return runner([sys.executable, installer, "--home", home])
+    return runner([pick_python(), installer, "--home", home])

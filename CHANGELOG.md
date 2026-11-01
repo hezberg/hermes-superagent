@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.4 — 2026-11-01
+
+- **Root cause of the multi-day "config not loaded" saga, fixed.**
+  Hermes' bundled CLI python ships no PyYAML; every `import yaml`
+  in the plugin silently failed, so the suite config, the profile
+  configs, and the default config all read as empty — doctor
+  reported a perfectly valid config as missing while several other
+  checks vacuously passed on empty data. Fixes:
+  - the plugin bundles `miniyaml`, a subset parser covering the
+    suite's config grammar, and `_yaml_load` falls back to it when
+    PyYAML is not importable (equivalence-tested against PyYAML on
+    the shipped template and a filled config);
+  - `hermes superagent upgrade` now probes for a PyYAML-capable
+    interpreter before running the installer, instead of blindly
+    using the plugin's own interpreter (which is how the 0.5.3
+    upgrade pulled successfully, then died at the install step).
+
 ## 0.5.3 — 2026-11-01
 
 - **All script and plugin output is English now.** The installer,
