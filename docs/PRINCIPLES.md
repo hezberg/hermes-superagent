@@ -34,7 +34,7 @@ with one of them, the principle wins and the feature gets re-thought.
    user is waiting for, it says so. Polling is the system's job, not
    the user's.
 
-## Last-mile backlog (honest status at v0.3.0)
+## Last-mile backlog (honest status at v0.4.0)
 
 | Item | Status |
 |---|---|
@@ -44,3 +44,4 @@ with one of them, the principle wins and the feature gets re-thought.
 | User config lives outside the repo tree (source of truth under `~/.hermes/superagent/`), so upgrades cannot clobber it | **Done** — installer prefers the filled suite copy over a pristine repo template and says so |
 | Guided setup as the default path; install errors in prose | Largely done — `hermes superagent doctor` checks the whole install in prose with fixes; installer self-checks plugin loading and explains in plain language |
 | Dashboard-first status surfaces | Partial — Hermes' dashboard works; the suite does not point at it yet |
+| Proactive reminders for unclosed work (blocked / stalled / unreviewed), ledger-governed so they never nag twice | **Done** — reminder ledger (fingerprint + backoff), no-agent cron tick delivers via Hermes' cron router, Router reminder protocol; the delivery target is picked once on the host (`--deliver`) |

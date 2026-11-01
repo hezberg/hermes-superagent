@@ -76,4 +76,4 @@ else
   say "Some paths remain (see above)."
   exit 1
 fi
-say "Note: if you scheduled the watchdog cron job manually, remove that job too (hermes cron list)."
+say "Note: if a reminder cron job was registered (hermes cron list shows superagent-reminder-tick), remove that job too — uninstall deletes the script it runs, but the job entry is Hermes' own record."

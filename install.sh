@@ -126,6 +126,33 @@ elif ! hermes plugins enable superagent; then
   say "注意：'hermes plugins enable superagent' 没成功。Hermes 的插件是 opt-in 的，没启用就不会加载——看板分发主链路不受影响（靠 profile + 分发器），但 status/doctor/digest/watchdog 这些命令面不会出现。请手动跑一次：hermes plugins enable superagent，然后重启 gateway。"
 fi
 
+# Reminder tick: a no-agent cron script. Its stdout IS the delivery —
+# Hermes' cron router sends printed lines to the user's platform, and
+# a silent tick sends nothing. The ledger inside guarantees it only
+# speaks when unclosed work genuinely needs the person.
+say "== installing reminder tick script -> $HERMES_HOME/scripts/superagent-reminder-tick.py"
+if [ "$DRY_RUN" = "1" ]; then
+  say "[dry-run] install scripts/reminder_tick.py"
+else
+  mkdir -p "$HERMES_HOME/scripts"
+  sed "s|__HERMES_HOME__|$HERMES_HOME|g" "$SCRIPT_DIR/scripts/reminder_tick.py" > "$HERMES_HOME/scripts/superagent-reminder-tick.py"
+  chmod +x "$HERMES_HOME/scripts/superagent-reminder-tick.py"
+fi
+TARGETS="$TARGETS
+$HERMES_HOME/scripts/superagent-reminder-tick.py"
+say "== registering reminder cron (every 10m, no-agent)"
+if [ "$DRY_RUN" = "1" ]; then
+  say "[dry-run] hermes cron create \"every 10m\" --no-agent --script superagent-reminder-tick.py --deliver <platform>"
+elif hermes cron list 2>/dev/null | grep -q "superagent-reminder-tick"; then
+  say "reminder cron already registered; leaving it as-is"
+elif hermes cron create "every 10m" --no-agent --script superagent-reminder-tick.py >/dev/null 2>&1; then
+  say "reminder cron registered —— 但还没指定投递平台：跑 hermes cron list 找到它，用 hermes cron edit <id> --deliver <你的平台，如 feishu> 指过去，提醒才会真正发到你手上。"
+else
+  say "注意：提醒 cron 没注册成功（这个版本的 cron 命令面可能不同）。手动注册一条即可："
+  say "  hermes cron create \"every 10m\" --no-agent --script superagent-reminder-tick.py --deliver <你的平台，如 feishu>"
+  say "不注册也不影响其他功能，只是未闭环任务不会主动提醒。"
+fi
+
 say "== rendering profiles -> $HERMES_HOME/profiles"
 if [ "$DRY_RUN" = "1" ]; then
   say "[dry-run] python3 render_profiles.py --config $CONFIG --templates $SCRIPT_DIR/profiles --out $HERMES_HOME/profiles"

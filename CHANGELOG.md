@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.0 — 2026-11-01
+
+Proactive reminders for unclosed work — the mechanism that separates
+an assistant from a tool you have to poll. Design (operator-approved):
+four layers — a durable ledger, event + schedule triggers, a
+judgement pass before anything is said, and anti-nagging discipline.
+
+- **Reminder ledger** (`plugin/superagent/reminders.py`): situations
+  that need the person — a card **blocked**, **stalled**, or **done
+  but unreviewed** — are fingerprinted by task + state + the epoch
+  the state began. Each is announced once, then re-announced only
+  after a backoff that doubles each time (1h → 2h → 4h …, capped at
+  24h). A state change re-arms; closing a task prunes its row.
+  Inspect it any time with `hermes superagent reminders`.
+- **Timed driver**: the installer drops a no-agent cron script
+  (`~/.hermes/scripts/superagent-reminder-tick.py`) and registers a
+  Hermes cron job for it (every 10 minutes). In no-agent mode the
+  script's stdout is the delivery — Hermes' cron router sends it to
+  the chosen platform; a tick with nothing due prints nothing and
+  stays silent. Urgent items (blocked/stalled) get a line each;
+  finished-unreviewed work folds into one gentle summary line. Set
+  the delivery target once: `hermes cron edit <id> --deliver feishu`.
+  If registration fails on a given Hermes version, the installer
+  prints the exact command instead of failing.
+- **Judgement stays with the Router**: the tick applies the
+  deterministic discipline (freshness, dedupe, backoff); the Router
+  skill's reminder protocol covers the conversational side —
+  re-check before repeating, never re-announce what was already
+  acknowledged, one message per situation, calmer tone for older
+  waits.
+- Watchdog runs now also pass through the reminder ledger (due items
+  are recorded and stored in the outbox, store-first as always).
+
+113 tests passing. Sandbox-verified end to end: tick 1 announces a
+blocked card and folds a finished one into the summary line, tick 2
+is silent (backoff), a fresh block episode re-arms and announces
+again, and uninstall leaves nothing behind.
+
 ## 0.3.1 — 2026-11-01
 
 - **Plugin-not-loaded: root cause found and fixed.** Reading Hermes'

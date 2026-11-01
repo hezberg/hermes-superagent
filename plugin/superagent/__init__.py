@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.3.1"
+PLUGIN_VERSION = "0.4.0"
 
 
 # --------------------------------------------------------------------------
@@ -292,6 +292,40 @@ def sync_journal():
 # Doctor (whole-install health check, in prose)
 # --------------------------------------------------------------------------
 
+def run_reminder_pass(tasks, events_by_task, stalled_ids, watchdog_cfg):
+    """One reminder pass: find situations needing the person, keep
+    only the ones the ledger says are due, record them, and store the
+    prose lines in the outbox (store-first delivery). Returns the due
+    list. Shared by the watchdog command and the tick script."""
+    from .reminders import (
+        ReminderLedger,
+        candidates,
+        filter_due,
+        render_reminder_lines,
+        settings_from,
+    )
+
+    now = time.time()
+    settings = settings_from(watchdog_cfg)
+    cands = candidates(tasks, events_by_task, stalled_ids, settings, now)
+    ledger = ReminderLedger(os.path.join(suite_dir(), "reminders.json"))
+    state = ledger.load()
+    due = filter_due(cands, state, settings, now)
+    ledger.prune([c["fingerprint"] for c in cands])
+    if due:
+        lines = render_reminder_lines(due)
+        try:
+            from .outbox import Outbox
+
+            box = Outbox(os.path.join(suite_dir(), "outbox.json"))
+            for cand, line in zip(due, lines):
+                box.enqueue(cand["task_id"], "router", line, now=now)
+        except Exception:
+            pass
+        ledger.record(due, now)
+    return due
+
+
 def _doctor_findings():
     import socket
 
@@ -536,6 +570,7 @@ def _cli_setup(parser):
     sub.add_parser("doctor", help="Health-check the whole install, in plain language")
     recall = sub.add_parser("recall", help="Search past outcomes in the journal")
     recall.add_argument("query", nargs="*", help="Keyword(s) to search for")
+    sub.add_parser("reminders", help="Show the reminder ledger for unclosed work")
 
 
 def _cli_handler(args):
@@ -614,6 +649,31 @@ def _cli_handler(args):
                 f"watchdog: STALLED task={f['task_id']} assignee={f['assignee']} "
                 f"reasons={','.join(f['reasons'])} (authority="
                 f"{wd.get('authority', 'report-only')}; no action taken in report-only mode)"
+            )
+        due = run_reminder_pass(tasks, events, {f["task_id"] for f in findings}, wd)
+        for cand in due:
+            print(
+                f"reminder: due kind={cand['kind']} task={cand['task_id']} "
+                f"count={cand['count']}（已落台账与 outbox；投递由 cron/Router 完成）"
+            )
+        return 0
+    if sub == "reminders":
+        from .reminders import ReminderLedger
+
+        state = ReminderLedger(
+            os.path.join(suite_dir(), "reminders.json")
+        ).load()
+        rows = state.get("rows", [])
+        if not rows:
+            print("提醒台账是空的：还没有提醒过任何未闭环任务。")
+            return 0
+        print(f"提醒台账（{len(rows)} 条未闭环情况）：")
+        for row in rows:
+            when = datetime.fromtimestamp(row.get("last_at") or 0).strftime(
+                "%Y-%m-%d %H:%M"
+            )
+            print(
+                f"- {row['task_id']} · {row['kind']} · 已提醒 {row['count']} 次 · 最近 {when}"
             )
         return 0
     print(status_text())

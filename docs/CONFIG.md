@@ -78,10 +78,33 @@ remains as a fallback for tasks that never report.
 | `stall_minutes` | 30 | Running task with no board update for this long = `no_progress` |
 | `heartbeat_stale_minutes` | 15 | Worker heartbeat older than this = `heartbeat_stale` |
 
-Scheduling: run `hermes superagent watchdog` from cron, or create a
-Hermes cron job that invokes it on the interval above. (Cron registration
-is deliberately not automated by the installer yet — Hermes' cron CLI
-surface differs across versions; see ASSUMPTIONS.md.)
+Scheduling: the installer registers a Hermes **no-agent cron job**
+(every `interval_minutes`) that runs
+`~/.hermes/scripts/superagent-reminder-tick.py`. In no-agent mode the
+script's stdout is delivered verbatim to the chosen platform, and a
+silent tick delivers nothing. Point the job at your platform once
+(`hermes cron edit <id> --deliver feishu`); if registration failed at
+install time, the installer prints the exact `hermes cron create`
+command to run by hand.
+
+### Reminders for unclosed work
+
+The tick also runs the reminder pass. A task that needs the person —
+**blocked**, **stalled**, or **done but unreviewed** — is surfaced
+under a ledger (`~/.hermes/superagent/reminders.json`, inspect with
+`hermes superagent reminders`): each situation is fingerprinted by
+task + state + when it entered that state, announced once, then
+re-announced only after a backoff that doubles each time (base
+`remind_backoff_base_minutes`, capped at `remind_backoff_cap_minutes`).
+A state change re-arms the reminder; closing the task prunes it.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `remind_blocked_after_minutes` | 0 | Grace before a blocked card is announced |
+| `remind_ready_after_minutes` | 240 | Grace before a finished card asks for review |
+| `remind_stalled_after_minutes` | 0 | Extra grace on top of stall detection |
+| `remind_backoff_base_minutes` | 60 | Wait before the second announcement |
+| `remind_backoff_cap_minutes` | 1440 | Longest wait between announcements |
 
 ## events
 
