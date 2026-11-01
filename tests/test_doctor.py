@@ -176,3 +176,28 @@ class TestPresenceMeansNonEmpty(unittest.TestCase):
     def test_environ_counts_only_non_empty(self):
         out = doc.presence_from_env_texts([], {"A": "1", "B": ""})
         self.assertEqual(out, {"A": True})
+
+
+class TestEntryWiring(unittest.TestCase):
+    def test_unset_entry_is_silent(self):
+        self.assertEqual(doc.check_entry_wiring({}, "sa-router", {}, ""), [])
+        self.assertEqual(
+            doc.check_entry_wiring({"platform": ""}, "sa-router", {}, ""), [])
+
+    def test_route_satisfies(self):
+        cfg = {"gateway": {"profile_routes": [
+            {"platform": "feishu", "profile": "sa-router"}]}}
+        out = doc.check_entry_wiring({"platform": "feishu"}, "sa-router", cfg, "")
+        self.assertEqual(out[0]["level"], "ok")
+
+    def test_dedicated_app_satisfies(self):
+        out = doc.check_entry_wiring(
+            {"platform": "feishu"}, "sa-router", {}, "FEISHU_APP_ID=cli_x\n")
+        self.assertEqual(out[0]["level"], "ok")
+
+    def test_unwired_entry_is_an_error_with_the_snippet(self):
+        out = doc.check_entry_wiring(
+            {"platform": "feishu", "user_id": "ou_1"}, "sa-router", {}, "")
+        self.assertEqual(out[0]["level"], "error")
+        self.assertIn("profile: sa-router", out[0]["fix"])
+        self.assertIn("user_id: ou_1", out[0]["fix"])

@@ -73,6 +73,18 @@ workers:
   #   toolsets: [terminal, file, web]
   #   max_concurrent: 1
 
+# Chat entry (optional): route one messaging platform to the Router
+# so you can talk to it there. The installer never rewrites your
+# main Hermes config; doctor verifies the wiring and prints the
+# exact fix when it is missing. Either satisfies it: a
+# gateway.profile_routes entry in ~/.hermes/config.yaml sending
+# this platform to the router profile, or a dedicated app for the
+# platform in the router profile's own .env (FEISHU_APP_ID & co).
+entry:
+  platform: "" # e.g. feishu; empty = no chat entry managed
+  user_id: "" # optional: on a shared bot, route only this sender
+  chat_id: "" # optional: route only this chat
+
 # Authorization layer (borrowed from DeepSeek's dsh-superagent-prototype:
 # a deterministic Gate in front of the model's judgement, and an immutable
 # Mandate recorded on every accepted task).

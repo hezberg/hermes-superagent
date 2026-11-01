@@ -89,20 +89,23 @@ place when the suite meets a real installation:
    Hermes' SSRF guard treats as internal — on such machines
    `allow_private_urls` is the difference between web tools working
    and not working at all.
-10. **Chat-entry routing (unpinned).** The suite prepares everything
-    on its side for a Feishu entry — the Router's rendered config
-    carries `platform_toolsets.feishu: [kanban, memory, skills]`, the
-    Router skill defines the completion wake-up protocol, SETUP.md §6
-    lists the host steps. Two facts remain version-dependent and must
-    be pinned on the target install: the exact platform key spelling
-    (`feishu`) in toolset selection, and how a gateway chat is routed
-    to a non-default profile (orchestrator_profile vs profile
-    routes). Hermes' own docs establish the subscription half:
-    cards created inside a gateway chat auto-subscribe their origin
-    chat, and terminal events wake the creating agent
-    (`kanban.auto_subscribe_on_create`, default on) — a bare CLI
-    session has no deliverable destination, which is why completion
-    notifications require the chat entry.
+10. **Chat-entry routing — RESOLVED 2026-11-01 (source survey,
+    docs/research/HERMES-MECHANISMS.md Q5).** The gateway is
+    multiplex-only: one process serves every profile
+    (`gateway.multiplex_profiles`, default true). A platform
+    reaches the Router two native ways: a `gateway.profile_routes`
+    entry in the main config (`platform` + match fields → the
+    router profile, fails closed), or a dedicated platform app in
+    the router profile's own `.env` (e.g. `FEISHU_APP_ID`). The
+    suite config declares the intent (`entry:`), the installer
+    never rewrites the main Hermes config, and doctor verifies the
+    wiring (check_entry_wiring) with the exact fix snippet.
+    Completion notifications: cards created inside a gateway chat
+    auto-subscribe their origin chat and terminal events wake the
+    creating agent natively; a bare CLI session is deliberately
+    left silent by Hermes, and the suite's reminder tick covers
+    exactly that gap (journal completion lines for unsubscribed
+    cards only).
 11. **Providers and models live in Hermes, never in the suite
     (operator's doctrine, 2026-11-01).** superagent.yaml holds only
     per-role SELECTIONS. Resolution sources in the default profile's

@@ -174,3 +174,37 @@ class TestSharedWorkerTemplate(unittest.TestCase):
                   encoding="utf-8") as fh:
             cfg = yaml.safe_load(fh)
         self.assertEqual([w["name"] for w in cfg["workers"]], ["general"])
+
+
+class TestSoulAndAutoLoad(unittest.TestCase):
+    def setUp(self):
+        with open(os.path.join(ROOT, "config/examples/deepseek.yaml"),
+                  encoding="utf-8") as fh:
+            self.cfg = yaml.safe_load(fh)
+        self.tmp = tempfile.TemporaryDirectory()
+        render.render_all(self.cfg, os.path.join(ROOT, "profiles"), self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def read(self, profile, name):
+        with open(os.path.join(self.tmp.name, profile, name),
+                  encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_every_profile_gets_a_soul(self):
+        for profile in ("sa-router", "sa-worker-general",
+                        "sa-worker-research", "sa-worker-deep"):
+            soul = self.read(profile, "SOUL.md")
+            self.assertIn(profile, soul)
+            self.assertNotIn("{{", soul)
+
+    def test_router_soul_carries_the_dispatch_default(self):
+        soul = self.read("sa-router", "SOUL.md")
+        self.assertIn("never ask", soul.lower().replace("  ", " "))
+
+    def test_role_skills_are_auto_loaded(self):
+        self.assertIn("auto_load: [router-superagent]",
+                      self.read("sa-router", "config.yaml"))
+        self.assertIn("auto_load: [worker-superagent]",
+                      self.read("sa-worker-general", "config.yaml"))

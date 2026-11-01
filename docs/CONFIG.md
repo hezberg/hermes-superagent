@@ -136,3 +136,29 @@ A state change re-arms the reminder; closing the task prunes it.
 | Field | Meaning |
 |---|---|
 | `allow_private_urls` | bool, default false. Hermes' SSRF guard blocks web/browser fetches to private, loopback, link-local and CGNAT addresses. Turn on only when this machine legitimately needs those destinations (classic case: Clash/mihomo fake-IP DNS, where public names resolve into 198.18.0.0/15 and every fetch is blocked; or LAN/tailnet-hosted endpoints). When true it is rendered into **every** profile — profiles do not inherit the default profile's security settings, so a global `hermes config set` does not reach workers. Hermes' docs call this a deliberate trust boundary: enabling it lets agents fetch arbitrary LAN addresses. When false the section is omitted from rendered profiles, preserving any per-profile choice made by hand. |
+
+## entry (optional)
+
+| Field | Meaning |
+|---|---|
+| `platform` | A messaging platform to route to the Router (e.g. `feishu`). Empty = no chat entry managed |
+| `user_id` | Optional: on a shared bot, route only this sender |
+| `chat_id` | Optional: route only this chat |
+
+Declaring an entry does not make the installer rewrite your main
+Hermes config. Doctor verifies the wiring is real — either a
+`gateway.profile_routes` entry in `~/.hermes/config.yaml` sending
+the platform to the router profile, or a dedicated platform app in
+the router profile's own `.env` — and prints the exact fix when
+neither exists.
+
+## Profile identity and memory (not config fields)
+
+Each rendered profile also receives a `SOUL.md` — Hermes' identity
+slot, loaded from the profile's own home into every session. That
+is where the role's default behavior lives (dispatch-first for the
+Router, mandate-bound execution for workers); the role skill is
+pinned alongside it via `skills.auto_load`. The installer also
+seeds each profile's `memories/MEMORY.md` once with starting role
+facts; after that the file is the agent's own and is never
+overwritten or removed by install/uninstall.

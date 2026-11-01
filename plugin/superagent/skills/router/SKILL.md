@@ -61,7 +61,15 @@ the task under its original Mandate — unless that person stopped it.
    config actually defines — a lone general worker takes everything;
    when specialists exist (research for reading/synthesis, deep for
    hard reasoning and review), route by their role descriptions.
-5. **Fire and forget, then follow up.** Creating the card ends your
+5. **Structure the work with the board's own mechanics.** A job
+   that decomposes becomes a parent card with child cards linked
+   to it (children promote automatically as parents finish), not
+   one vague mega-card. Attach the source material to the card —
+   files attached to a completed card are delivered back to the
+   chat natively. For long or open-ended work, set the card's
+   completion contract / goal mode so "done" is checkable rather
+   than vibes.
+6. **Fire and forget, then follow up.** Creating the card ends your
    turn's obligation; do not poll in a loop. Report when board state
    changes materially.
 

@@ -1,10 +1,13 @@
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "plugin"))
 
 from superagent.journal import (
+    completion_lines,
+    subscribed_task_ids,
     entry_key,
     new_entries,
     render_digest,
@@ -124,3 +127,35 @@ class TestSearch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCompletionLines(unittest.TestCase):
+    def entry(self, tid, outcome, assignee="sa-worker-general"):
+        return {"task_id": tid, "title": f"task {tid}", "assignee": assignee,
+                "outcome": outcome, "ts": 1, "summary": "", "artifacts": []}
+
+    def test_unsubscribed_done_and_failed_are_announced(self):
+        lines = completion_lines(
+            [self.entry("a", "ready"), self.entry("b", "failed")], set())
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("Done:"))
+        self.assertTrue(lines[1].startswith("Failed:"))
+
+    def test_subscribed_blocked_and_archived_stay_silent(self):
+        lines = completion_lines(
+            [self.entry("a", "ready"), self.entry("b", "blocked"),
+             self.entry("c", "dropped")], {"a"})
+        self.assertEqual(lines, [])
+
+    def test_subscribed_ids_read_from_board_db(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as tmp:
+            db = os.path.join(tmp, "kanban.db")
+            conn = sqlite3.connect(db)
+            conn.execute("CREATE TABLE kanban_notify_subs "
+                         "(task_id TEXT, platform TEXT, chat_id TEXT)")
+            conn.execute("INSERT INTO kanban_notify_subs VALUES ('t1', 'feishu', 'c1')")
+            conn.commit()
+            conn.close()
+            self.assertEqual(subscribed_task_ids(db), {"t1"})
+            self.assertEqual(subscribed_task_ids(os.path.join(tmp, "nope.db")), set())

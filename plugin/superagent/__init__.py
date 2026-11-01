@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.8.1"
+PLUGIN_VERSION = "0.9.0"
 
 
 # --------------------------------------------------------------------------
@@ -508,6 +508,19 @@ def _doctor_findings():
             providers_view[label] = {"api_key_env": var}
     env_present = {v: presence.get(v, False) for v in role_vars.values()}
     findings += doc.check_key_env(providers_view, env_present)
+    # Chat entry: if the suite config declares one, verify the
+    # platform actually reaches the Router (route or dedicated app).
+    try:
+        router_env_text = ""
+        router_env_path = os.path.join(
+            hermes_home(), "profiles", router.get("profile") or "", ".env")
+        if os.path.isfile(router_env_path):
+            with open(router_env_path, encoding="utf-8") as fh:
+                router_env_text = fh.read()
+        findings += doc.check_entry_wiring(
+            cfg.get("entry"), router.get("profile"), default_cfg, router_env_text)
+    except Exception:
+        pass
     # Convergence: a profile copy that differs from the global .env
     # is a stale key still being sent. Compare values here; doctor
     # receives only names of the offenders.

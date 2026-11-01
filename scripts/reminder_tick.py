@@ -52,7 +52,12 @@ def main():
         pass
 
     try:
-        sa.sync_journal()
+        from superagent.journal import completion_lines, subscribed_task_ids
+
+        fresh = sa.sync_journal()
+        subs = subscribed_task_ids(sa.board_path())
+        for line in completion_lines(fresh, subs):
+            print(line)
         cfg = sa.load_suite_config()
         wd = cfg.get("watchdog") or {}
         tasks = sa.board_tasks()

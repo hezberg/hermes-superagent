@@ -719,6 +719,32 @@ def main(argv=None):
         with open(src, "rb") as fh:
             converge_file(fh.read(), dst, f"{kind} skill ({profile})")
 
+    # Memory seeds: each profile's built-in memory is the agent's
+    # own notebook (Hermes loads memories/MEMORY.md from the profile
+    # home). The suite plants a starting page — role facts the agent
+    # would otherwise learn slowly — ONCE. After that the file
+    # belongs to the agent: never overwritten, never recorded as
+    # managed, left behind by uninstall like .env and sessions.
+    role_by_profile = {router: "router"}
+    for w in (eff_cfg.get("workers") or []):
+        role_by_profile[w.get("profile")] = w.get("role") or w.get("name") or "worker"
+    for profile, kind in skill_map:
+        if not profile:
+            continue
+        seed_src = os.path.join(REPO, "profiles", kind, "memory-seed.md")
+        seed_dst = os.path.join(home, "profiles", profile, "memories", "MEMORY.md")
+        if os.path.exists(seed_dst) or not os.path.isfile(seed_src):
+            continue
+        with open(seed_src, encoding="utf-8") as fh:
+            seed = fh.read()
+        seed = seed.replace("{{PROFILE_NAME}}", profile).replace(
+            "{{ROLE}}", role_by_profile.get(profile, kind))
+        if not args.dry_run:
+            os.makedirs(os.path.dirname(seed_dst), exist_ok=True)
+            with open(seed_dst, "w", encoding="utf-8") as fh:
+                fh.write(seed)
+        changes.append(f"memory seed ({profile})")
+
     prior_synced = {}
     if os.path.isfile(state_path(home)):
         try:
@@ -865,7 +891,7 @@ def postflight(home, dry_run):
         if f.get("level") != "error":
             continue
         text = f.get("text", "")
-        if "api_key_env" in text or "plugins.enabled" in text or "plugins.disabled" in text:
+        if "api_key_env" in text or "plugins.enabled" in text or "plugins.disabled" in text or "profile_routes" in text:
             steps.append(f.get("fix") or text)
         else:
             hard.append(text)

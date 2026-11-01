@@ -181,7 +181,7 @@ def top_level_sections(text):
 
 
 def merge_preserving_sections(rendered, existing,
-                              owned_extra=("model", "platform_toolsets", "security")):
+                              owned_extra=("model", "platform_toolsets", "security", "skills")):
     """Rendered content wins; top-level sections that exist ONLY in
     the on-disk file are carried over.
 
@@ -251,6 +251,18 @@ def render_all(cfg, templates_dir, out_dir):
         os.makedirs(dest_dir, exist_ok=True)
         with open(os.path.join(dest_dir, "config.yaml"), "w", encoding="utf-8") as fh:
             fh.write(render_template(template, values))
+        # SOUL.md is the profile's identity slot — Hermes loads it
+        # from the profile's own home into every session. This is
+        # where the role's default behavior lives (a skill is only a
+        # reference the model may consult; the SOUL is always on).
+        soul_src = os.path.join(templates_dir, template_rel, "SOUL.md")
+        if fallback_rel and not os.path.isfile(soul_src):
+            soul_src = os.path.join(templates_dir, fallback_rel, "SOUL.md")
+        if os.path.isfile(soul_src):
+            with open(soul_src, "r", encoding="utf-8") as fh:
+                soul = fh.read()
+            with open(os.path.join(dest_dir, "SOUL.md"), "w", encoding="utf-8") as fh:
+                fh.write(render_template(soul, values))
         written.append(dest_dir)
     return written
 

@@ -289,3 +289,46 @@ def summarize(findings):
     if warns:
         return f"Bottom line: no hard problems; {warns} note(s) worth a look."
     return "Bottom line: all clear."
+
+
+def check_entry_wiring(entry, router_profile, default_config, router_env_text):
+    """The declared chat entry must actually reach the Router.
+
+    Two native wirings satisfy it (gateway multiplexing serves all
+    profiles from one process): a gateway.profile_routes entry in
+    the main config sending the platform to the router profile, or
+    a dedicated platform app in the router profile's own .env
+    (FEISHU_APP_ID & friends). Anything else means messages land on
+    the default profile and the Router never hears them."""
+    entry = entry or {}
+    platform = str(entry.get("platform") or "").strip()
+    if not platform:
+        return []
+    routes = ((default_config or {}).get("gateway") or {}).get("profile_routes") or []
+    routed = any(
+        isinstance(r, dict)
+        and str(r.get("platform") or "") == platform
+        and str(r.get("profile") or "") == router_profile
+        for r in routes
+    )
+    app_var = f"{platform.upper()}_APP_ID"
+    dedicated = any(
+        line.strip().startswith(app_var + "=") and line.split("=", 1)[1].strip()
+        for line in (router_env_text or "").splitlines()
+    )
+    if routed or dedicated:
+        how = "profile route" if routed else "dedicated app in the router profile"
+        return [_finding("ok", f"Chat entry: {platform} reaches {router_profile} ({how}).")]
+    snippet = (
+        f"gateway:\n  profile_routes:\n    - platform: {platform}\n"
+        f"      profile: {router_profile}"
+    )
+    if entry.get("user_id"):
+        snippet += f"\n      user_id: {entry['user_id']}"
+    if entry.get("chat_id"):
+        snippet += f"\n      chat_id: {entry['chat_id']}"
+    return [_finding(
+        "error",
+        f"Chat entry declared for {platform} but no gateway.profile_routes entry sends it to {router_profile}, and the router profile has no dedicated {platform} app ({app_var}) — messages would land on the default profile.",
+        f"Add this to ~/.hermes/config.yaml:\n{snippet}\n(or run: hermes --profile {router_profile} gateway setup and give it a dedicated {platform} app), then hermes gateway restart.",
+    )]

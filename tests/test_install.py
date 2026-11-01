@@ -297,10 +297,11 @@ class TestUninstall(InstallerCase):
             os.path.join(self.home, "profiles", "sa-router", "config.yaml")))
         # The profile dir itself may remain: key sync planted a .env
         # there during install, and a profile's .env is the operator's
-        # property, never removed by uninstall.
+        # property, never removed by uninstall. The agent's memory
+        # directory is likewise its own data and stays.
         router_dir = os.path.join(self.home, "profiles", "sa-router")
         if os.path.isdir(router_dir):
-            self.assertEqual(os.listdir(router_dir), [".env"])
+            self.assertEqual(sorted(os.listdir(router_dir)), [".env", "memories"])
         self.assertTrue(os.path.isfile(self.suite_cfg_path()))
         self.assertTrue(os.path.isfile(journal))
         # state is gone, so a second uninstall has nothing to go on
@@ -531,3 +532,30 @@ class TestProfileConfigCoOwnership(InstallerCase):
         self.assertIn("model:", text)  # the render's own keys intact
         fourth = self.run_install()
         self.assertIn("Changed: nothing", fourth.stdout)  # idempotent
+
+
+class TestSoulAndMemorySeed(InstallerCase):
+    def install_filled(self):
+        suite_dir = os.path.join(self.home, "superagent")
+        os.makedirs(suite_dir, exist_ok=True)
+        with open(os.path.join(suite_dir, "superagent.yaml"), "w") as fh:
+            yaml.safe_dump(FILLED, fh)
+        return self.run_install()
+
+    def test_soul_lands_and_memory_seeds_once(self):
+        first = self.install_filled()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        router_dir = os.path.join(self.home, "profiles", "sa-router")
+        with open(os.path.join(router_dir, "SOUL.md")) as fh:
+            self.assertIn("sa-router", fh.read())
+        memory = os.path.join(router_dir, "memories", "MEMORY.md")
+        with open(memory) as fh:
+            self.assertIn("Router", fh.read())
+        # The agent writes its own notes into its memory; a second
+        # install must NOT overwrite them (seed-once).
+        with open(memory, "a") as fh:
+            fh.write("- the operator prefers terse reports\n")
+        second = self.run_install()
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        with open(memory) as fh:
+            self.assertIn("terse reports", fh.read())

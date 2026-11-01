@@ -103,6 +103,50 @@ def new_entries(tasks, events_by_task, seen_keys):
     return entries
 
 
+def subscribed_task_ids(db_path):
+    """Task ids that already have a Hermes kanban completion
+    subscription (kanban_notify_subs). Those completions are pushed
+    to their origin chat by Hermes' own notifier; the suite's tick
+    must not repeat them. Any read problem -> empty set (the suite
+    line is the fallback, never a gate)."""
+    import sqlite3
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            rows = conn.execute(
+                "SELECT DISTINCT task_id FROM kanban_notify_subs"
+            ).fetchall()
+        finally:
+            conn.close()
+        return {r[0] for r in rows}
+    except Exception:
+        return set()
+
+
+def completion_lines(entries, subscribed_ids):
+    """Tick lines announcing finished work the native notifier will
+    NOT deliver: cards with no subscription — above all the ones
+    dispatched from a plain CLI session, whose origin Hermes
+    deliberately leaves silent (docs/research/HERMES-MECHANISMS.md
+    Q11). Blocked cards are left to the reminder pass; archived
+    cards are bookkeeping, not news."""
+    lines = []
+    for entry in entries or []:
+        outcome = entry.get("outcome")
+        if outcome not in ("ready", "failed"):
+            continue
+        if entry.get("task_id") in (subscribed_ids or set()):
+            continue
+        who = entry.get("assignee") or "a worker"
+        title = _one_line(entry.get("title") or entry.get("task_id"), 120)
+        if outcome == "ready":
+            lines.append(f"Done: {title} ({who})")
+        else:
+            lines.append(f"Failed: {title} ({who}) — details in the suite journal")
+    return lines
+
+
 def _fmt_ts(ts):
     try:
         return datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M")

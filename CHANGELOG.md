@@ -1,3 +1,36 @@
+## 0.9.0 — 2026-11-01
+
+The native-mechanisms release: a source-level survey of Hermes
+(docs/research/HERMES-MECHANISMS.md) found the suite re-implementing
+or ignoring mechanisms Hermes already has. This release adopts
+them, in impact order:
+
+- **Every profile gets a SOUL.md.** Hermes loads it from the
+  profile's own home into every session — it is the identity slot,
+  and the suite never wrote one, so role behavior depended on the
+  model happening to consult its skill (field failure: the Router
+  asking permission to create a card and apologizing for not
+  executing). The Router's SOUL makes dispatch the default action;
+  workers get a mandate-bound SOUL. Role skills are additionally
+  pinned via the native `skills.auto_load`, so their full text is
+  in every session's prompt prefix.
+- **Memory seeds.** Each profile's built-in memory
+  (memories/MEMORY.md) is seeded once with starting role facts and
+  then belongs to the agent — never overwritten, protected on
+  uninstall like .env and sessions.
+- **Chat entry is verified, not assumed** (closes ASSUMPTIONS
+  #10): the new `entry:` config declares a platform for the
+  Router; doctor checks it actually reaches the router profile —
+  via a gateway.profile_routes entry or a dedicated app in the
+  router profile's own .env — and prints the exact fix otherwise.
+- **The reminder tick stops duplicating Hermes' notifier.** It
+  now announces completions only for cards with NO kanban
+  subscription — the CLI-dispatched cards Hermes deliberately
+  leaves silent. Subscribed cards are pushed by Hermes itself;
+  the journal still records everything.
+- **Router skill** uses the board's own structure: parent/child
+  card links, attachments, completion contracts / goal mode.
+
 ## 0.8.1 — 2026-11-01
 
 - **Profile config.yaml is co-owned now.** Hermes' own setup

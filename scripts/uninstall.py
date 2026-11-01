@@ -62,7 +62,7 @@ def main(argv=None):
 
     def is_protected(rel):
         parts = rel.replace(os.sep, "/").split("/")
-        return parts[-1] == ".env" or parts[0] in ("sessions", "logs", "memory")
+        return parts[-1] == ".env" or parts[0] in ("sessions", "logs", "memory", "memories")
 
     removed = []
     kept_profiles = []

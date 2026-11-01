@@ -103,6 +103,16 @@ def validate(cfg):
     if wd.get("authority", "report-only") not in WATCHDOG_AUTHORITIES:
         err(f"watchdog.authority must be one of {sorted(WATCHDOG_AUTHORITIES)}")
 
+    entry = cfg.get("entry")
+    if entry is not None:
+        if not isinstance(entry, dict):
+            err("entry: must be a mapping")
+        else:
+            for field in ("platform", "user_id", "chat_id"):
+                value = entry.get(field)
+                if value is not None and not isinstance(value, str):
+                    err(f"entry.{field} must be a string")
+
     policy = cfg.get("policy")
     if policy is None:
         warn("policy section missing — the Gate will default to observe mode, CLI source only")
