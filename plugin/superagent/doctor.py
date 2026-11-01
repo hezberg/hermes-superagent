@@ -157,6 +157,60 @@ def check_smart_quotes(profile_texts):
     return out
 
 
+def check_plugin_enablement(enabled, disabled, plugin_present=True):
+    """Hermes plugins are opt-in: the loader silently skips any plugin
+    whose key is not in plugins.enabled (and plugins.disabled wins).
+    `enabled` is None when the config has no plugins.enabled list at
+    all (a fresh install may grandfather user plugins on migration,
+    but a plugin installed afterwards is not covered)."""
+    if not plugin_present:
+        return [_finding(
+            "error",
+            "插件目录不在 ~/.hermes/plugins/superagent——套件没装完整。",
+            "在仓库目录重新运行 ./install.sh --force。",
+        )]
+    disabled = disabled or []
+    if "superagent" in disabled:
+        return [_finding(
+            "error",
+            "superagent 在 plugins.disabled 里——禁用名单优先于启用名单，插件不会加载。",
+            "跑 hermes plugins enable superagent（它会把两边名单理顺），然后重启 gateway。",
+        )]
+    if enabled is not None and "superagent" not in enabled:
+        return [_finding(
+            "error",
+            "superagent 不在 plugins.enabled 名单里——Hermes 的插件是 opt-in 的，目录在也不会加载（这正是首次真机安装时 status 命令不存在的原因）。",
+            "跑 hermes plugins enable superagent，然后重启 gateway。",
+        )]
+    if enabled is None:
+        return [_finding(
+            "warn",
+            "配置里还没有 plugins.enabled 名单——全新安装的插件可能没被收录。",
+            "跑一次 hermes plugins enable superagent 最稳妥，然后重启 gateway。",
+        )]
+    return [_finding("ok", "插件已在 plugins.enabled 名单里，会被加载。")]
+
+
+def check_install_drift(manifest_version, running_version, config_mtime, installed_epoch):
+    """Catch the two half-updated states: the suite config edited after
+    the last install (rendered profiles are stale), and plugin files
+    newer than the install record (an interrupted upgrade)."""
+    out = []
+    if manifest_version and running_version and manifest_version != running_version:
+        out.append(_finding(
+            "warn",
+            f"插件版本（{running_version}）与上次安装记录（{manifest_version}）对不上——可能升级装了一半。",
+            "在仓库目录重新运行 ./install.sh --force，让所有部件回到同一版本。",
+        ))
+    if config_mtime and installed_epoch and config_mtime > installed_epoch + 1:
+        out.append(_finding(
+            "warn",
+            "superagent.yaml 在上次安装之后又被改过——改动还没渲染进各 profile，现在跑的仍是旧配置。",
+            "重新运行 ./install.sh --force 让改动生效。",
+        ))
+    return out
+
+
 def check_board(counts):
     if counts is None:
         return [_finding(

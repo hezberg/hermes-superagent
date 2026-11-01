@@ -132,6 +132,22 @@ def render_digest(entries, limit=8):
     return "\n".join(lines)
 
 
+def search_entries(entries, query):
+    """Entries whose title/summary/assignee/task id mention the query
+    (case-insensitive substring). An empty query matches nothing."""
+    q = str(query or "").strip().lower()
+    if not q:
+        return []
+    out = []
+    for e in entries or []:
+        haystack = " ".join(
+            str(e.get(k) or "") for k in ("title", "summary", "assignee", "task_id")
+        ).lower()
+        if q in haystack:
+            out.append(e)
+    return out
+
+
 def render_journal_md(entries):
     """The full human-readable journal document."""
     lines = [

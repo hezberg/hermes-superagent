@@ -4,7 +4,13 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "plugin"))
 
-from superagent.journal import entry_key, new_entries, render_digest, render_journal_md
+from superagent.journal import (
+    entry_key,
+    new_entries,
+    render_digest,
+    render_journal_md,
+    search_entries,
+)
 
 
 def task(tid, status, title="任务", assignee="sa-worker-research", updated=1000.0):
@@ -93,6 +99,27 @@ class TestRender(unittest.TestCase):
             set(),
         )
         self.assertIn("/a/b.md", render_journal_md(entries))
+
+
+class TestSearch(unittest.TestCase):
+    def setUp(self):
+        self.entries = new_entries(
+            [task("t1", "done", title="查 DeepSeek 最新模型"),
+             task("t2", "done", title="修登录 bug")],
+            {"t1": [ev("completed", 990.0, summary="结论：无新发布")],
+             "t2": [ev("completed", 995.0, summary="根因是 cookie 过期")]},
+            set(),
+        )
+
+    def test_matches_title_and_summary_case_insensitive(self):
+        self.assertEqual(len(search_entries(self.entries, "deepseek")), 1)
+        self.assertEqual(len(search_entries(self.entries, "COOKIE")), 1)
+        self.assertEqual(len(search_entries(self.entries, "sa-worker-research")), 2)
+
+    def test_no_match_and_empty_query(self):
+        self.assertEqual(search_entries(self.entries, "不存在的词"), [])
+        self.assertEqual(search_entries(self.entries, ""), [])
+        self.assertEqual(search_entries(self.entries, None), [])
 
 
 if __name__ == "__main__":

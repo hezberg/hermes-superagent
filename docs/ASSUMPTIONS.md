@@ -30,13 +30,23 @@ place when the suite meets a real installation:
      skills).
    v0.2.1 templates write `platform_toolsets` and the installer also
    runs `hermes -p <router> tools enable kanban` as a second path.
-3. **Plugin API signatures** — registration uses the documented
-   `register(ctx)` surface (`register_tool`, `register_hook` with
-   `on_session_start` / `on_session_end` / `post_tool_call`,
+3. **Plugin API signatures & enablement** — registration uses the
+   documented `register(ctx)` surface (`register_tool`, `register_hook`
+   with `on_session_start` / `on_session_end` / `post_tool_call`,
    `register_command`, `register_cli_command`, `register_skill`).
    Command handlers are written as `async def handler(ctx, args)` per the
    published tutorial; if your version passes a different shape, adapt
    `cmd_tasks` / `cmd_stop` in `plugin/superagent/__init__.py`.
+   **Enablement is opt-in (source-verified 2026-11-01):** Hermes'
+   plugin gate (`hermes_cli/plugins_discovery.gate_manifest`) silently
+   skips any user plugin whose key is not in `plugins.enabled` —
+   at DEBUG log level, so nothing shows in normal logs. A fresh
+   install's migration grandfathers plugins that were present at
+   migration time only; a plugin installed afterwards (like this one)
+   is skipped until `hermes plugins enable superagent` runs. This —
+   not an API mismatch — is why the first live install reported
+   `'superagent' is not a hermes command`. The installer now enables
+   the plugin, and `doctor` checks the enablement state.
 4. **Skills location** — the installer copies the Router skill into
    `<router profile>/skills/router-superagent/` and the plugin also
    tries `register_skill` with the bundled copy. One of the two paths is

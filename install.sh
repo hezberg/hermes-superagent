@@ -114,6 +114,18 @@ run rm -rf "$HERMES_HOME/plugins/superagent"
 run cp -R "$SCRIPT_DIR/plugin/superagent" "$HERMES_HOME/plugins/superagent"
 run rm -rf "$HERMES_HOME/plugins/superagent/__pycache__"
 
+# Hermes plugins are opt-in: a plugin directory on disk is NOT loaded
+# until its key is in plugins.enabled (the loader skips it silently).
+# Enable it through Hermes' own tooling — without this step the whole
+# command surface (status/doctor/digest/watchdog) silently does not
+# exist, which is exactly what happened on the first live install.
+say "== enabling plugin (hermes plugins enable superagent)"
+if [ "$DRY_RUN" = "1" ]; then
+  say "[dry-run] hermes plugins enable superagent"
+elif ! hermes plugins enable superagent; then
+  say "注意：'hermes plugins enable superagent' 没成功。Hermes 的插件是 opt-in 的，没启用就不会加载——看板分发主链路不受影响（靠 profile + 分发器），但 status/doctor/digest/watchdog 这些命令面不会出现。请手动跑一次：hermes plugins enable superagent，然后重启 gateway。"
+fi
+
 say "== rendering profiles -> $HERMES_HOME/profiles"
 if [ "$DRY_RUN" = "1" ]; then
   say "[dry-run] python3 render_profiles.py --config $CONFIG --templates $SCRIPT_DIR/profiles --out $HERMES_HOME/profiles"

@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.3.0"
+PLUGIN_VERSION = "0.3.1"
 
 
 # --------------------------------------------------------------------------
@@ -370,6 +370,50 @@ def _doctor_findings():
     except Exception:
         resolved = []
     findings += doc.check_fake_ip(resolved, allow_private)
+
+    plugin_present = os.path.isdir(
+        os.path.join(hermes_home(), "plugins", "superagent")
+    )
+    enabled_list, disabled_list = None, []
+    try:
+        import yaml
+
+        with open(
+            os.path.join(hermes_home(), "config.yaml"), encoding="utf-8"
+        ) as fh:
+            default_cfg = yaml.safe_load(fh) or {}
+        plugins_cfg = default_cfg.get("plugins") or {}
+        if isinstance(plugins_cfg.get("enabled"), list):
+            enabled_list = plugins_cfg["enabled"]
+        if isinstance(plugins_cfg.get("disabled"), list):
+            disabled_list = plugins_cfg["disabled"]
+    except Exception:
+        pass
+    findings += doc.check_plugin_enablement(
+        enabled_list, disabled_list, plugin_present
+    )
+
+    manifest_version, installed_epoch = None, None
+    try:
+        with open(
+            os.path.join(suite_dir(), "manifest.json"), encoding="utf-8"
+        ) as fh:
+            manifest = json.load(fh)
+        manifest_version = manifest.get("version")
+        installed_epoch = datetime.strptime(
+            manifest.get("installed_at") or "", "%Y-%m-%dT%H:%M:%S%z"
+        ).timestamp()
+    except Exception:
+        pass
+    try:
+        config_mtime = os.path.getmtime(
+            os.path.join(suite_dir(), "superagent.yaml")
+        )
+    except OSError:
+        config_mtime = None
+    findings += doc.check_install_drift(
+        manifest_version, PLUGIN_VERSION, config_mtime, installed_epoch
+    )
     findings += doc.check_board(board_counts())
     return findings
 
@@ -490,6 +534,8 @@ def _cli_setup(parser):
     sub.add_parser("watchdog", help="Report stalled tasks (report-only)")
     sub.add_parser("digest", help="Sync the journal and print recent outcomes")
     sub.add_parser("doctor", help="Health-check the whole install, in plain language")
+    recall = sub.add_parser("recall", help="Search past outcomes in the journal")
+    recall.add_argument("query", nargs="*", help="Keyword(s) to search for")
 
 
 def _cli_handler(args):
@@ -506,6 +552,21 @@ def _cli_handler(args):
                 print(f"  修法：{f['fix']}")
         print(summarize(findings))
         return 1 if any(f["level"] == "error" for f in findings) else 0
+    if sub == "recall":
+        from .journal import render_digest, search_entries
+
+        sync_journal()
+        query = " ".join(getattr(args, "query", None) or []).strip()
+        if not query:
+            print("用法：hermes superagent recall <关键词>——在历史成果里找相关的任务。")
+            return 2
+        matches = search_entries(journal_entries(), query)
+        if not matches:
+            print(f"没有找到和「{query}」相关的历史成果。")
+            return 0
+        print(f"和「{query}」相关的历史成果（{len(matches)} 条）：")
+        print(render_digest(matches, limit=10))
+        return 0
     if sub == "digest":
         from .journal import render_digest
 

@@ -102,5 +102,42 @@ class TestMisc(unittest.TestCase):
         self.assertIn("全部正常", doc.summarize([{"level": "ok", "text": "z"}]))
 
 
+class TestPluginEnablement(unittest.TestCase):
+    def test_not_in_enabled_list_is_error_with_fix(self):
+        findings = doc.check_plugin_enablement(["other-plugin"], [])
+        self.assertEqual(levels(findings), ["error"])
+        self.assertIn("hermes plugins enable superagent", findings[0]["fix"])
+
+    def test_disabled_wins_is_error(self):
+        findings = doc.check_plugin_enablement(["superagent"], ["superagent"])
+        self.assertEqual(levels(findings), ["error"])
+
+    def test_enabled_ok(self):
+        self.assertEqual(
+            levels(doc.check_plugin_enablement(["superagent"], [])), ["ok"])
+
+    def test_no_list_at_all_warns(self):
+        self.assertEqual(levels(doc.check_plugin_enablement(None, [])), ["warn"])
+
+    def test_plugin_files_missing_is_error(self):
+        self.assertEqual(
+            levels(doc.check_plugin_enablement(["superagent"], [], False)),
+            ["error"])
+
+
+class TestInstallDrift(unittest.TestCase):
+    def test_version_mismatch_warns(self):
+        findings = doc.check_install_drift("0.2.2", "0.3.0", None, None)
+        self.assertEqual(levels(findings), ["warn"])
+
+    def test_config_edited_after_install_warns(self):
+        findings = doc.check_install_drift("0.3.0", "0.3.0", 2000.0, 1000.0)
+        self.assertEqual(levels(findings), ["warn"])
+        self.assertEqual(doc.check_install_drift("0.3.0", "0.3.0", 900.0, 1000.0), [])
+
+    def test_no_manifest_no_findings(self):
+        self.assertEqual(doc.check_install_drift(None, "0.3.0", None, None), [])
+
+
 if __name__ == "__main__":
     unittest.main()

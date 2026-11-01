@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.1 — 2026-11-01
+
+- **Plugin-not-loaded: root cause found and fixed.** Reading Hermes'
+  plugin gate in source (`hermes_cli/plugins_discovery.gate_manifest`)
+  settled it: user plugins are opt-in — the loader silently skips
+  (DEBUG log only) any plugin whose key is not in `plugins.enabled`,
+  and a fresh install's migration grandfathers only plugins present
+  at migration time. Ours was installed afterwards, so it never
+  loaded and `hermes superagent …` did not exist. The installer now
+  runs `hermes plugins enable superagent`; `doctor` checks the
+  enablement state (missing list / not listed / disabled-wins) with
+  the fix attached. ASSUMPTIONS item 3 records the mechanism.
+- **`hermes superagent recall <关键词>`** — search the journal by
+  keyword and get matching past outcomes in prose. Global memory is
+  only useful if it can be *recalled*, not just written.
+- **Doctor: install-drift checks.** Warns when the suite config was
+  edited after the last install (rendered profiles are stale) and
+  when the plugin version and the install manifest disagree (a
+  half-finished upgrade).
+
+101 tests passing; sandbox-verified: install issues the enable call,
+doctor flags a missing enablement with its fix and clears it once
+enabled, recall hits and misses behave.
+
 ## 0.3.0 — 2026-11-01
 
 The last-mile release. Operator direction (docs/PRINCIPLES.md): stop
