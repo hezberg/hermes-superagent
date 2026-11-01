@@ -1,5 +1,5 @@
 name: superagent
-version: 0.10.0
+version: 0.10.1
 description: >-
   Super-agent layer for Hermes, after DeepSeek Harness team's design
   exploration: a dispatch-only Router profile, Kanban-backed Worker

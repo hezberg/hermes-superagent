@@ -1,3 +1,16 @@
+## 0.10.1 — 2026-11-01
+
+- **Wizard: a menu selection that names its model is final.**
+  Picking a provider whose Hermes entry already defines a model
+  (the menu line shows it) no longer triggers a redundant
+  "Model for ..." prompt with a blank default — the choice settles
+  provider and model together. The default profile's own block is
+  no longer listed as a pseudo-selection either; "inherit" covers
+  it. Models are asked only for entries that define none.
+- Wizard now checks each CHOSEN provider's key variable at
+  selection time and warns on the spot when it has no value,
+  instead of letting the install fail its first request later.
+
 ## 0.10.0 — 2026-11-01
 
 - **Interactive setup wizard** (`hermes superagent setup`, or

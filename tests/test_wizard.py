@@ -88,7 +88,7 @@ class WizardCase(unittest.TestCase):
                      "  base_url: http://100.64.0.1:3001/v1\n"
                      "  api_key_env: SUPERAGENT_MAIN_API_KEY\n")
         with open(os.path.join(self.home, ".env"), "w") as fh:
-            fh.write("SUPERAGENT_MAIN_API_KEY=sk-test\n")
+            fh.write("SUPERAGENT_MAIN_API_KEY=sk-test\nWB_KEY=sk-wb\n")
         self.old_path = os.environ.get("PATH", "")
         os.environ["PATH"] = self.bindir + os.pathsep + self.old_path
         self.calls = []
@@ -162,3 +162,33 @@ class TestWizardFlow(WizardCase):
         self.assertTrue(any("hermes setup" in line for line in ui.output))
         self.assertFalse(any("install.py" in a
                              for call in self.calls for a in call))
+
+
+class TestWizardNamedProvider(WizardCase):
+    def setUp(self):
+        super().setUp()
+        with open(os.path.join(self.home, "config.yaml"), "w") as fh:
+            fh.write(
+                "model:\n  provider: custom\n  default: base-model\n"
+                "  base_url: http://100.64.0.1:3001/v1\n"
+                "  api_key_env: SUPERAGENT_MAIN_API_KEY\n"
+                "custom_providers:\n"
+                "  - name: workbuddy\n"
+                "    base_url: http://100.64.0.1:3001/v1\n"
+                "    model: cn:deepseek-v4.1-flash\n"
+                "    api_key_env: WB_KEY\n")
+
+    def test_named_provider_with_model_asks_nothing_more(self):
+        # topology=1, router picks menu item 2 (workbuddy — its entry
+        # already names a model, so NO model question may follow;
+        # the next scripted answer belongs to the worker menu),
+        # worker inherits, no chat entry.
+        rc, ui = self.run_wizard(["1", "2", "1", "1"])
+        self.assertEqual(rc, 0, "\n".join(ui.output))
+        self.assertFalse(any(a.startswith("Model for")
+                             for a in ui.answers))
+        cfg = sa._yaml_load(open(os.path.join(
+            self.home, "superagent", "superagent.yaml")).read())
+        self.assertEqual(cfg["router"]["provider"], "workbuddy")
+        self.assertEqual(cfg["router"]["model"], "cn:deepseek-v4.1-flash")
+        self.assertEqual(ui.answers, [])  # every answer consumed as scripted

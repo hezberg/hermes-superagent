@@ -371,7 +371,14 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
                 worker_names.append(extra)
 
     # -- 4. Per-role provider/model --------------------------------------
-    menu = hermes_provider_menu(default_cfg)
+    # The menu offers real selections only: named providers and
+    # custom providers (the default profile's own block is what
+    # "inherit" means — it is not a selectable name). A selection
+    # whose entry already names a model settles BOTH provider and
+    # model; the wizard asks for a model only when the entry has
+    # none.
+    menu = [item for item in hermes_provider_menu(default_cfg)
+            if not item.get("default")]
     menu_labels = ["Inherit the default profile's model"] + [
         f"{item['select']} — {item['detail']}" for item in menu
     ]
@@ -385,13 +392,28 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
             continue
         item = menu[idx - 1]
         provider = item["select"]
-        known_model = ""
-        block = default_cfg.get("model") or {}
-        if item.get("default"):
-            known_model = str(block.get("default") or block.get("model") or "")
-        model = ui.ask(
-            f"Model for {profile} (blank = provider default)", known_model)
+        if item.get("model"):
+            selections[profile] = (provider, item["model"])
+            say(f"  -> {provider} / {item['model']} (as defined in Hermes)")
+            continue
+        model = ui.ask(f"Model for {profile} (blank = provider default)")
         selections[profile] = (provider, model)
+
+    # Key check for the selections themselves: a chosen provider
+    # whose key variable has no value anywhere installs fine and
+    # fails only at the first request — surface it NOW (a warning,
+    # not a stop: Hermes may resolve the key from a secret store
+    # this check cannot see).
+    global_env_text = _read(os.path.join(home, ".env"))
+    items_by_select = {item["select"]: item for item in menu}
+    for _label, profile, _kind in roles:
+        provider, _model = selections[profile]
+        var = (items_by_select.get(provider) or {}).get("key_var") or ""
+        if var and not _env_value(global_env_text, var) \
+                and not environ.get(var):
+            say(f"  ! {profile}: provider {provider} reads its key from "
+                f"{var}, which has no value in ~/.hermes/.env — add "
+                f"{var}=<key> there, or the role cannot call its model.")
 
     # -- 5. Feishu entry ---------------------------------------------------
     entry_platform = ""
