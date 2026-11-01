@@ -7,13 +7,23 @@ with warnings so you can check the plumbing before choosing models.
 
 Usage: validate_config.py [path-to-superagent.yaml]
 """
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     import yaml
+
+    _load = yaml.safe_load
+    _YAMLError = yaml.YAMLError
 except ImportError:
-    print("ERROR: PyYAML is required (it ships with Hermes itself).", file=sys.stderr)
-    sys.exit(2)
+    # No PyYAML in this interpreter (e.g. Hermes' bundled python):
+    # the bundled subset parser covers the suite's config grammar.
+    import miniyaml
+
+    _load = miniyaml.parse
+    _YAMLError = ValueError
 
 PROVIDER_TYPES = {"openai-compatible", "anthropic"}
 WATCHDOG_AUTHORITIES = {"report-only", "nudge", "requeue"}
@@ -139,11 +149,11 @@ def main(argv):
     path = argv[1] if len(argv) > 1 else "config/superagent.yaml"
     try:
         with open(path, "r", encoding="utf-8") as fh:
-            cfg = yaml.safe_load(fh)
+            cfg = _load(fh.read())
     except FileNotFoundError:
         print(f"ERROR: config not found: {path}", file=sys.stderr)
         return 2
-    except yaml.YAMLError as exc:
+    except _YAMLError as exc:
         print(f"ERROR: invalid YAML in {path}: {exc}", file=sys.stderr)
         return 2
 

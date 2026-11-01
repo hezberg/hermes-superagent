@@ -109,6 +109,32 @@ class TestTwoPhase(InstallerCase):
         self.assertEqual(result.returncode, 3, result.stdout)
 
 
+class TestNoPyYaml(InstallerCase):
+    """The installer must survive an interpreter with no PyYAML —
+    Hermes' bundled python is one, and it killed real upgrades
+    (the plugin's upgrade command launches the installer with it).
+    A blocker module named yaml.py shadows the real one via
+    PYTHONPATH and raises ImportError on import."""
+
+    def test_full_install_with_yaml_blocked(self):
+        blocker = os.path.join(self.tmp.name, "blocker")
+        os.makedirs(blocker)
+        with open(os.path.join(blocker, "yaml.py"), "w") as fh:
+            fh.write("raise ImportError('blocked for test')\n")
+        self.env["PYTHONPATH"] = blocker
+        seed = os.path.join(self.tmp.name, "seed.yaml")
+        with open(seed, "w") as fh:
+            yaml.safe_dump(FILLED, fh)
+        result = self.run_install("--config", seed)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Installed:", result.stdout)
+        # The rendered profile config is real YAML, parseable here.
+        with open(os.path.join(self.home, "profiles", "sa-router",
+                               "config.yaml")) as fh:
+            rendered = yaml.safe_load(fh)
+        self.assertEqual(rendered["model"]["default"], "deepseek-v4.1-flash")
+
+
 class TestConverge(InstallerCase):
     def test_seed_via_explicit_config(self):
         staging = os.path.join(self.tmp.name, "staging.yaml")

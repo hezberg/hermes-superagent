@@ -42,7 +42,14 @@ def pick_python(probe=None):
                 return False
 
     seen = set()
-    for cand in (sys.executable, shutil.which("python3"), "/usr/bin/python3"):
+    candidates = (
+        sys.executable,
+        shutil.which("python3"),
+        "/opt/homebrew/bin/python3",
+        "/usr/local/bin/python3",
+        "/usr/bin/python3",
+    )
+    for cand in candidates:
         if cand and cand not in seen:
             seen.add(cand)
             if probe(cand):

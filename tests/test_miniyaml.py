@@ -57,6 +57,12 @@ class TestMiniYaml(unittest.TestCase):
             text = fh.read()
         self.assertEqual(miniyaml.parse(text), yaml.safe_load(text))
 
+    def test_roundtrip_through_pyyaml_dump(self):
+        # PyYAML dumps block sequences indentless (dashes aligned
+        # with the key) — the parser must accept that style too.
+        data = yaml.safe_load(FILLED)
+        self.assertEqual(miniyaml.parse(yaml.safe_dump(data)), data)
+
     def test_scalars(self):
         parsed = miniyaml.parse("a: 1\nb: true\nc: x y\nd: 'it''s'\n")
         self.assertEqual(parsed, {"a": 1, "b": True, "c": "x y", "d": "it's"})

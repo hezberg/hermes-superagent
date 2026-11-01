@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.5 — 2026-11-01
+
+- **The installer no longer needs PyYAML at all.** 0.5.4's
+  interpreter probe was defeated from inside the Hermes process:
+  there, `python3` resolves to Hermes' own bundled python (its
+  tools directory leads the PATH), so every probe candidate lacked
+  PyYAML and the upgrade still died at the install step. Removed
+  the dependency instead of probing harder: install.py,
+  validate_config.py, and render_profiles.py all fall back to the
+  bundled miniyaml parser (now also covering PyYAML's indentless
+  sequence style, caught by a blocked-yaml end-to-end install
+  test). Side effect: previously installed upgrade commands start
+  working again, because the installer they invoke no longer dies.
+
 ## 0.5.4 — 2026-11-01
 
 - **Root cause of the multi-day "config not loaded" saga, fixed.**

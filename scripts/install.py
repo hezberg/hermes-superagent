@@ -81,10 +81,20 @@ def is_pristine(cfg):
 
 
 def load_yaml(path):
-    import yaml
-
     with open(path, encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
+        text = fh.read()
+    try:
+        import yaml
+
+        return yaml.safe_load(text)
+    except ImportError:
+        # The installer can be launched by interpreters with no
+        # PyYAML (Hermes' bundled python is one — it killed real
+        # upgrades). The bundled subset parser covers the config.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import miniyaml
+
+        return miniyaml.parse(text)
 
 
 # ------------------------------------------------------------------ trees
@@ -349,12 +359,6 @@ def main(argv=None):
     if shutil.which("hermes") is None and not args.dry_run:
         say("ERROR: 'hermes' CLI not found. This suite is an add-on to Hermes, not a bundle.")
         return EXIT_PREFLIGHT
-    try:
-        import yaml  # noqa: F401
-    except ImportError:
-        say("ERROR: this python3 has no PyYAML (the copy Hermes ships is fine).")
-        return EXIT_PREFLIGHT
-
     suite_cfg, cfg, code = resolve_config(home, args.config, args.dry_run)
     if suite_cfg is None:
         return code

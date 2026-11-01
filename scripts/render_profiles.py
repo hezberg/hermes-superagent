@@ -17,11 +17,18 @@ import argparse
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 try:
     import yaml
+
+    _load = yaml.safe_load
 except ImportError:
-    print("ERROR: PyYAML is required (it ships with Hermes itself).", file=sys.stderr)
-    sys.exit(2)
+    # No PyYAML in this interpreter (e.g. Hermes' bundled python):
+    # the bundled subset parser covers the suite's config grammar.
+    import miniyaml
+
+    _load = miniyaml.parse
 
 # superagent provider type -> Hermes `model.provider` value.
 # "openai-compatible" endpoints are served through Hermes' custom-endpoint
@@ -135,7 +142,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     with open(args.config, "r", encoding="utf-8") as fh:
-        cfg = yaml.safe_load(fh)
+        cfg = _load(fh.read())
     written = render_all(cfg, args.templates, args.out)
     for path in written:
         print(f"rendered: {path}")

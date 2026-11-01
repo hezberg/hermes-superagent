@@ -129,6 +129,14 @@ def _parse_map(lines, i, indent):
             out[key] = _scalar(rest)
         elif i < len(lines) and lines[i][0] > indent:
             out[key], i = _parse_block(lines, i, lines[i][0])
+        elif (
+            i < len(lines)
+            and lines[i][0] == indent
+            and (lines[i][1] == "-" or lines[i][1].startswith("- "))
+        ):
+            # Indentless block sequence as the value (PyYAML's dump
+            # style): the dashes align with the key itself.
+            out[key], i = _parse_seq(lines, i, indent)
         else:
             out[key] = None
     return out, i
