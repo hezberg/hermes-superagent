@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.1 — 2026-11-01
+
+- **The `git pull` config conflict is structurally dead.** Field
+  report: the operator's filled config lived in the tracked
+  `config/superagent.yaml`, so every upgrade pull aborted with
+  "local changes would be overwritten". Two changes close the class:
+  (1) first-install staging moves to `config/superagent.local.yaml`
+  (already gitignored via `*.local.yaml`); SETUP.md and the README
+  manual path now write there and pass it via `--config`.
+  (2) `pick_config` now treats the installed copy as the source of
+  truth unconditionally: once `~/.hermes/superagent/superagent.yaml`
+  holds real values it wins over any repo-side candidate, so the
+  repo tree never again holds values worth fighting over.
+
 ## 0.4.0 — 2026-11-01
 
 Proactive reminders for unclosed work — the mechanism that separates

@@ -61,9 +61,18 @@ class TestPickConfig(unittest.TestCase):
         self.assertEqual(chosen, self.suite)
         self.assertTrue(from_suite)
 
-    def test_filled_repo_wins(self):
+    def test_filled_suite_wins_even_over_filled_repo(self):
+        # The installed copy is the source of truth once filled; a
+        # repo-side file is first-install staging only.
         self.write(self.repo, FILLED)
         self.write(self.suite, FILLED)
+        chosen, from_suite = pick.choose(self.repo, self.suite)
+        self.assertEqual(chosen, self.suite)
+        self.assertTrue(from_suite)
+
+    def test_filled_repo_used_when_suite_pristine(self):
+        self.write(self.repo, FILLED)
+        self.write(self.suite, PRISTINE)
         chosen, from_suite = pick.choose(self.repo, self.suite)
         self.assertEqual(chosen, self.repo)
         self.assertFalse(from_suite)

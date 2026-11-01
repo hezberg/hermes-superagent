@@ -51,8 +51,13 @@ command -v python3 >/dev/null 2>&1 || { say "ERROR: python3 not found."; exit 1;
 }
 
 # Config source of truth: once the user has a filled-in copy installed
-# under $HERMES_HOME/superagent/, that copy wins over a pristine repo
-# template — a git pull must never clobber the user's real config.
+# under $HERMES_HOME/superagent/, that copy wins over any repo-side
+# candidate — a git pull must never fight over the user's real config.
+# First-install staging may live in config/superagent.local.yaml
+# (gitignored); the tracked template is only the fallback.
+if [ "$CONFIG_EXPLICIT" != "1" ] && [ -f "$SCRIPT_DIR/config/superagent.local.yaml" ]; then
+  CONFIG="$SCRIPT_DIR/config/superagent.local.yaml"
+fi
 SUITE_CFG="$HERMES_HOME/superagent/superagent.yaml"
 if [ "$CONFIG_EXPLICIT" != "1" ] && [ -f "$SUITE_CFG" ]; then
   CONFIG="$(python3 "$SCRIPT_DIR/scripts/pick_config.py" "$CONFIG" "$SUITE_CFG")"

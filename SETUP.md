@@ -79,11 +79,16 @@ operator step (entering keys). Ask for one confirmation.
 
 ## 4. Execute
 
-1. Write the answers into `config/superagent.yaml` (or copy the closest
-   file from `config/examples/` and edit it). Validate:
-   `python3 scripts/validate_config.py config/superagent.yaml` — fix
-   every ERROR before continuing; warnings about empty fields mean an
-   answer is still missing.
+1. Write the answers into `config/superagent.local.yaml` (copied
+   from the template or the closest file in `config/examples/`).
+   Never write user values into the tracked template
+   `config/superagent.yaml` — a locally edited tracked file blocks
+   every future `git pull` (field incident, 2026-11-01). The
+   `.local.yaml` name is gitignored, so the file is invisible to git.
+   Validate:
+   `python3 scripts/validate_config.py config/superagent.local.yaml`
+   — fix every ERROR before continuing; warnings about empty fields
+   mean an answer is still missing.
 2. **Operator step — the only one that must happen outside the
    agent.** Send one message with the exact line(s) for the operator
    to add to `~/.hermes/.env` in their own editor or terminal, one
@@ -95,13 +100,13 @@ operator step (entering keys). Ask for one confirmation.
    need a restart to pick it up — if you are running inside a
    gateway chat, warn the operator the conversation will drop and
    resume, and make the restart your last step.
-3. Install: `./install.sh --config config/superagent.yaml`. A refusal
+3. Install: `./install.sh --config config/superagent.local.yaml`. A refusal
    names the collision or validation problem; fix that, not around it.
    After this first install, the effective config's home is
    `~/.hermes/superagent/superagent.yaml`: the installer prefers that
-   filled-in copy over a pristine repo template on later runs, so
-   upgrades cannot clobber it. Point the operator at that file for
-   future edits.
+   filled-in copy over any repo-side file on later runs, so upgrades
+   cannot clobber it and `git pull` can never conflict over it. Point
+   the operator at that file for future edits.
 4. Verify: start the profile gateways per docs/CONFIG.md, then check
    `hermes superagent status` — config loaded, profiles listed, board
    present — and run `hermes superagent doctor`: it checks the whole

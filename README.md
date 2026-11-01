@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.4.0.** The dispatch chain is verified end-to-end on a
+> **Status: v0.4.1.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). On top of the v0.1 skeleton (layout,
 > configuration system, plugin registration, profile rendering,
@@ -73,12 +73,15 @@ cd hermes-superagent
 
 # 1. Configure: one file. Providers (OpenAI-compatible and Anthropic
 #    endpoints are both wired), models per role, watchdog behaviour.
-cp config/examples/deepseek.yaml config/superagent.yaml   # or edit the template
-$EDITOR config/superagent.yaml
+#    Use the .local.yaml name — it is gitignored, so your values can
+#    never block a git pull. (After the first install, the effective
+#    config lives at ~/.hermes/superagent/superagent.yaml.)
+cp config/examples/deepseek.yaml config/superagent.local.yaml   # or start from the template
+$EDITOR config/superagent.local.yaml
 
 # 2. Install (additive only; refuses to overwrite anything silently;
 #    enables the plugin and registers the reminder cron for you)
-./install.sh
+./install.sh --config config/superagent.local.yaml
 
 # 3. Provide keys — never in the yaml; the config names an env var.
 #    Add one line to ~/.hermes/.env, then restart the gateway:

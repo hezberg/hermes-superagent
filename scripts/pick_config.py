@@ -2,12 +2,12 @@
 """Choose which superagent.yaml an install should use.
 
 Rule (docs/PRINCIPLES.md #5 — configuration must survive being a
-user): when the repo copy is still the pristine template (no provider
-base_url and no role model filled in) but the installed copy under
-$HERMES_HOME/superagent/ has real values, the installed copy wins.
-That is the file the user actually filled in; a `git pull` refreshing
-the repo template must never silently replace it (this happened in
-the field on 2026-11-01 and cost a full re-configuration).
+user): once the installed copy under $HERMES_HOME/superagent/ has
+real values, it wins over any repo-side candidate. That is the file
+the user actually maintains; repo files are first-install staging,
+and a `git pull` must never get to fight over the real config (a
+locally edited tracked template blocks every merge — this happened
+in the field on 2026-11-01, twice).
 
 Prints the chosen path on stdout; when the installed copy wins, a
 human-readable note goes to stderr.
@@ -46,8 +46,13 @@ def load(path):
 
 
 def choose(repo_path, suite_path):
+    """The installed copy is the source of truth once it holds real
+    values: it wins over ANY repo-side candidate — pristine template
+    or a filled staging file alike. Repo files are for staging the
+    first install only; afterwards, living in the repo tree means
+    living where `git pull` can fight over the file."""
     suite_cfg = load(suite_path)
-    if suite_cfg is not None and not is_pristine(suite_cfg) and is_pristine(load(repo_path)):
+    if suite_cfg is not None and not is_pristine(suite_cfg):
         return suite_path, True
     return repo_path, False
 
@@ -59,9 +64,9 @@ def main(argv):
     chosen, from_suite = choose(argv[1], argv[2])
     if from_suite:
         print(
-            "note: 仓库里的配置还是空模板，改用你已填好的那份："
+            "note: 改用你已填好的那份配置："
             + chosen
-            + "（以后以这份为准，git pull 不会再冲掉它）",
+            + "（它在 ~/.hermes 下，不在仓库里，git pull 永远碰不到它；以后改配置就改这份）",
             file=sys.stderr,
         )
     print(chosen)
