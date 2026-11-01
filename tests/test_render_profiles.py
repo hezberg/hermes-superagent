@@ -150,3 +150,27 @@ class TestTemplateWarnings(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSharedWorkerTemplate(unittest.TestCase):
+    def test_any_worker_name_renders_from_the_shared_template(self):
+        cfg = {
+            "version": 1,
+            "providers": {"main": {"type": "openai-compatible",
+                                   "base_url": "https://api.example.com",
+                                   "api_key_env": "K"}},
+            "router": {"profile": "sa-router", "provider": "main", "model": "m"},
+            "workers": [{"name": "writer", "profile": "sa-worker-writer",
+                         "provider": "main", "model": "m", "toolsets": ["file"]}],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            written = render.render_all(
+                cfg, os.path.join(ROOT, "profiles"), tmp)
+            names = sorted(os.path.basename(p) for p in written)
+            self.assertEqual(names, ["sa-router", "sa-worker-writer"])
+
+    def test_shipped_template_has_exactly_one_worker(self):
+        with open(os.path.join(ROOT, "config", "superagent.yaml"),
+                  encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh)
+        self.assertEqual([w["name"] for w in cfg["workers"]], ["general"])

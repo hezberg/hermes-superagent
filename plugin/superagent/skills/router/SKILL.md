@@ -57,8 +57,10 @@ the task under its original Mandate — unless that person stopped it.
    Forward the original request and its source reference; do not
    paraphrase it into your own implementation plan — workers derive
    requirements from the source.
-4. **Pick the worker by role**: general for everyday execution,
-   research for reading/synthesis, deep for hard reasoning and review.
+4. **Pick the worker by role**: match the card to the workers the
+   config actually defines — a lone general worker takes everything;
+   when specialists exist (research for reading/synthesis, deep for
+   hard reasoning and review), route by their role descriptions.
 5. **Fire and forget, then follow up.** Creating the card ends your
    turn's obligation; do not poll in a loop. Report when board state
    changes materially.

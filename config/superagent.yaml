@@ -43,6 +43,11 @@ workers:
   # selection. The renderer adds memory + skills automatically, and the
   # Hermes dispatcher force-adds the kanban lifecycle tools when it
   # spawns the worker for a card — neither needs listing here.
+  #
+  # ONE worker by default: it takes every card. Add a worker when a
+  # class of work deserves its own model or a tighter toolset — the
+  # two classic specialists are shown commented out below; enabling
+  # one is uncommenting its block (and selecting its model).
   - name: general
     profile: sa-worker-general
     role: general # everyday tasks: shell, files, web
@@ -51,22 +56,22 @@ workers:
     reasoning_effort: ""
     toolsets: [terminal, file, web]
     max_concurrent: 2
-  - name: research
-    profile: sa-worker-research
-    role: research # reading, synthesis, long-form reporting
-    provider: ""
-    model: ""
-    reasoning_effort: ""
-    toolsets: [web, file]
-    max_concurrent: 1
-  - name: deep
-    profile: sa-worker-deep
-    role: deep # hard reasoning: debugging, design, review
-    provider: ""
-    model: "" # a reasoning model fits here, if you have one
-    reasoning_effort: "" # e.g. high — deep work is where effort pays
-    toolsets: [terminal, file, web]
-    max_concurrent: 1
+  # - name: research
+  #   profile: sa-worker-research
+  #   role: research # reading, synthesis, long-form reporting — no shell
+  #   provider: ""
+  #   model: ""
+  #   reasoning_effort: ""
+  #   toolsets: [web, file]
+  #   max_concurrent: 1
+  # - name: deep
+  #   profile: sa-worker-deep
+  #   role: deep # hard reasoning: debugging, design, review
+  #   provider: ""
+  #   model: "" # a reasoning model fits here, if you have one
+  #   reasoning_effort: "" # e.g. high — deep work is where effort pays
+  #   toolsets: [terminal, file, web]
+  #   max_concurrent: 1
 
 # Authorization layer (borrowed from DeepSeek's dsh-superagent-prototype:
 # a deterministic Gate in front of the model's judgement, and an immutable

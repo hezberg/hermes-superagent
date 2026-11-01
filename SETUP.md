@@ -68,8 +68,9 @@ Ask in this order, one per message. Recommendations in brackets.
 
 Do not ask about values with a good default; list them in the plan:
 watchdog report-only with 30-minute stall threshold, one worker slot
-reserved for human follow-ups, Router plus three workers with the
-default profile names.
+reserved for human follow-ups, Router plus ONE worker (general) with
+the default profile names — specialist workers (research, deep) are
+opt-in config blocks, added only when the operator wants them.
 
 ## 3. Plan
 

@@ -493,6 +493,11 @@ class TestDayOne(InstallerCase):
         self.assertNotIn("no line for SUPERAGENT_MAIN_API_KEY", second.stdout)
         self.assertNotIn("WARNING: postflight", second.stdout)
         self.assertIn("Finish with: hermes gateway restart", second.stdout)
-        for profile in ("sa-router", "sa-worker-general", "sa-worker-research"):
+        for profile in ("sa-router", "sa-worker-general"):
             with open(os.path.join(self.home, "profiles", profile, ".env")) as fh:
                 self.assertIn("SUPERAGENT_MAIN_API_KEY=", fh.read())
+        # One worker by default: the specialists are opt-in, so a
+        # fresh install must NOT materialize their profiles.
+        for profile in ("sa-worker-research", "sa-worker-deep"):
+            self.assertFalse(os.path.exists(
+                os.path.join(self.home, "profiles", profile)))

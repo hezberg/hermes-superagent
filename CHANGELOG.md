@@ -1,3 +1,20 @@
+## 0.8.0 — 2026-11-01
+
+- **One worker by default.** The general/research/deep trio was a
+  template铺设 choice, not an architecture (the three worker
+  templates were byte-identical; the roles differed only in config
+  values) — yet every default install paid for three profiles in
+  rendering, key sync and failure surface. The shipped template
+  now defines ONE worker (general); research and deep ship as
+  commented presets, enabled by uncommenting. Existing configs
+  that list three workers render exactly as before.
+- All workers render from a single shared template
+  (profiles/worker/); a per-name template can still override, and
+  arbitrary worker names now work — previously a worker whose
+  name had no template directory failed the render.
+- The Router skill routes by the roles the config actually
+  defines instead of assuming the trio exists.
+
 ## 0.7.3 — 2026-11-01
 
 - **Out-of-box audit.** The operator's standard: a fresh machine

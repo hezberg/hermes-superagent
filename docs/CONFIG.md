@@ -26,6 +26,13 @@ that reference it, so pre-0.7 configs keep working.)
 
 ## router / workers
 
+The template ships ONE worker (`general`), which takes every card.
+Add a worker block when a class of work deserves its own model or a
+tighter toolset — the template carries `research` (web + file, no
+shell) and `deep` (reasoning) as commented presets; enabling one is
+uncommenting it. Any number of workers is allowed; they all render
+from one shared template and differ only in these values.
+
 | Field | Meaning |
 |---|---|
 | `profile` | Hermes profile name to create (must be unique) |

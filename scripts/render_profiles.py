@@ -156,15 +156,24 @@ def render_all(cfg, templates_dir, out_dir):
     providers = cfg.get("providers") or {}
     written = []
 
-    jobs = [("router", cfg.get("router") or {}, "router", False)]
-    for w in cfg.get("workers") or []:
-        jobs.append((w.get("name", "worker"), w, os.path.join("workers", w.get("name", "worker")), True))
+    def template_for(template_rel, fallback_rel=None):
+        path = os.path.join(templates_dir, template_rel, "config.yaml.tmpl")
+        if fallback_rel and not os.path.isfile(path):
+            path = os.path.join(templates_dir, fallback_rel, "config.yaml.tmpl")
+        return path
 
-    for _name, role, template_rel, is_worker in jobs:
+    jobs = [("router", cfg.get("router") or {}, "router", None, False)]
+    for w in cfg.get("workers") or []:
+        # Workers share ONE template (they differed only in config
+        # values all along); a per-name template may still override.
+        jobs.append((w.get("name", "worker"), w,
+                     os.path.join("workers", w.get("name", "worker")), "worker", True))
+
+    for _name, role, template_rel, fallback_rel, is_worker in jobs:
         profile = role.get("profile")
         if not profile:
             continue
-        template_path = os.path.join(templates_dir, template_rel, "config.yaml.tmpl")
+        template_path = template_for(template_rel, fallback_rel)
         with open(template_path, "r", encoding="utf-8") as fh:
             template = fh.read()
         provider_cfg = providers.get(role.get("provider")) or {}
