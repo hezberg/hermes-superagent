@@ -26,7 +26,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.12.2"
+PLUGIN_VERSION = "0.13.0"
 
 
 # --------------------------------------------------------------------------
@@ -236,11 +236,36 @@ def board_tasks():
                 "title": d.get("title"),
                 "status": d.get("status"),
                 "assignee": d.get("assignee") or d.get("profile"),
+                "priority": d.get("priority") or 0,
+                "body": d.get("body") or "",
+                "result": d.get("result") or "",
+                "created_by": d.get("created_by"),
+                "created_at": _epoch(d.get("created_at")),
+                "started_at": _epoch(d.get("started_at")),
+                "completed_at": _epoch(d.get("completed_at")),
+                "consecutive_failures": d.get("consecutive_failures") or 0,
                 "updated_at": _epoch(d.get("updated_at")),
                 "last_heartbeat": _epoch(d.get("last_heartbeat") or d.get("heartbeat_at")),
             }
         )
     return tasks
+
+
+def board_links():
+    """{child_id: [parent_id, ...]} from task_links; {} when absent."""
+    conn = _board_connect()
+    if conn is None:
+        return {}
+    try:
+        rows = conn.execute("SELECT parent_id, child_id FROM task_links").fetchall()
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    links = {}
+    for parent_id, child_id in rows:
+        links.setdefault(child_id, []).append(parent_id)
+    return links
 
 
 def board_reports():
@@ -661,7 +686,81 @@ def status_payload():
     return payload
 
 
-def status_text():
+def _fmt_age(ts, now=None):
+    """Compact age for a timestamp: '12m', '3h05m', '2d4h', '—'."""
+    if not ts:
+        return "—"
+    now = now or time.time()
+    secs = max(0, int(now - ts))
+    if secs < 90:
+        return f"{secs}s"
+    if secs < 3600:
+        return f"{secs // 60}m"
+    if secs < 86400:
+        return f"{secs // 3600}h{secs % 3600 // 60:02d}m"
+    return f"{secs // 86400}d{secs % 86400 // 3600}h"
+
+
+_STATUS_ORDER = ("running", "blocked", "ready", "failed", "done")
+
+
+def _board_sections(level):
+    """The board rendered like the dashboard's kanban page: grouped
+    by status, one line per card, detail growing with the level."""
+    tasks = board_tasks()
+    if not tasks:
+        return "kanban board: no tasks yet"
+    now = time.time()
+    links = board_links() if level >= 2 else {}
+    by_status = {}
+    for t in tasks:
+        by_status.setdefault(t["status"] or "unknown", []).append(t)
+    ordered = [s for s in _STATUS_ORDER if s in by_status]
+    ordered += sorted(s for s in by_status if s not in _STATUS_ORDER)
+    caps = {1: {"running": 15, "blocked": 15, "failed": 10, "ready": 8, "done": 5},
+            2: {"running": 50, "blocked": 50, "failed": 50, "ready": 30, "done": 20}}
+    cap = caps.get(level, caps[2])
+    lines = []
+    for status in ordered:
+        group = by_status[status]
+        if status == "archived":
+            lines.append(f"Archived: {len(group)} (not shown)")
+            continue
+        group.sort(key=lambda t: (t.get("completed_at") or t.get("updated_at")
+                                  or t.get("created_at") or 0), reverse=True)
+        lines.append(f"{status.capitalize()} ({len(group)}):")
+        shown = group[:cap.get(status, 10)]
+        for t in shown:
+            bits = [f"  {t['id']}", t["title"] or "(untitled)"]
+            line = "  ".join(bits)
+            meta = []
+            if t.get("assignee"):
+                meta.append(f"→ {t['assignee']}")
+            if t.get("priority"):
+                meta.append(f"P{t['priority']}")
+            meta.append(f"age {_fmt_age(t.get('created_at'), now)}")
+            if status == "running" and t.get("last_heartbeat"):
+                meta.append(f"heartbeat {_fmt_age(t['last_heartbeat'], now)} ago")
+            if t.get("consecutive_failures"):
+                meta.append(f"failures {t['consecutive_failures']}")
+            if level >= 2 and links.get(t["id"]):
+                meta.append("child of " + ", ".join(links[t["id"]]))
+            lines.append(line + "  ·  " + " · ".join(meta))
+            if level >= 2:
+                detail = (t.get("result") if status in ("done", "failed")
+                          else t.get("body")) or ""
+                detail = " ".join(detail.split())[:160]
+                if detail:
+                    lines.append(f"      {detail}")
+        if len(group) > len(shown):
+            lines.append(f"  … and {len(group) - len(shown)} more")
+    return "\n".join(lines)
+
+
+def status_text(level=0):
+    """Level 0: compact (header, counts, latest outcomes).
+    Level 1: the board, grouped like the dashboard. Level 2: the
+    board uncapped-ish, with card bodies/results and links."""
     p = status_payload()
     if p["board"] is None:
         board = "kanban board: not initialized (no kanban.db yet)"
@@ -675,10 +774,13 @@ def status_text():
         f"router: {p['router_profile']} | accept: {p['accept_mode']} | "
         f"watchdog: {p['watchdog_authority']}\n{board}"
     )
+    if level >= 1 and p["board"] is not None:
+        text += "\n\n" + _board_sections(level)
     if p["recent_outcomes"]:
         from .journal import render_digest
 
-        text += "\n" + render_digest(journal_entries(), limit=3)
+        text += "\n" + render_digest(
+            journal_entries(), limit=10 if level >= 2 else 3)
     return text
 
 
@@ -691,7 +793,7 @@ def handle_sa_status(params, **kwargs):
 # --------------------------------------------------------------------------
 
 async def cmd_tasks(ctx, args="", **kwargs):
-    return status_text()
+    return status_text(2 if "full" in (args or "") else 1)
 
 
 async def cmd_stop(ctx, args="", **kwargs):
@@ -715,7 +817,11 @@ async def cmd_stop(ctx, args="", **kwargs):
 
 def _cli_setup(parser):
     sub = parser.add_subparsers(dest="subcommand")
-    sub.add_parser("status", help="Show superagent status")
+    st = sub.add_parser("status", help="Show superagent status (board view; -q brief, -v full detail)")
+    st.add_argument("-q", "--brief", action="store_true",
+                    help="One-screen summary: counts and latest outcomes only")
+    st.add_argument("-v", "--verbose", action="count", default=0,
+                    help="Full detail: card bodies/results, parent links, longer journal")
     sub.add_parser("watchdog", help="Report stalled tasks (report-only)")
     sub.add_parser("digest", help="Sync the journal and print recent outcomes")
     sub.add_parser("doctor", help="Health-check the whole install, in plain language")
@@ -974,7 +1080,9 @@ def _cli_handler(args):
                 f"- {row['task_id']} | {row['kind']} | reminded {row['count']}x | last {when}"
             )
         return 0
-    print(status_text())
+    level = 0 if getattr(args, "brief", False) else (
+        2 if getattr(args, "verbose", 0) else 1)
+    print(status_text(level))
     return 0
 
 

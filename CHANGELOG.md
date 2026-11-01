@@ -1,3 +1,16 @@
+## 0.13.0 — 2026-11-01
+
+- **`hermes superagent status` is a board now, not a one-liner.**
+  Three verbosity levels: default renders the board grouped by
+  status — like the dashboard's kanban page — with each card's
+  title, assignee, priority and age (plus heartbeat age for
+  running cards), sensible per-column caps with "… and N more";
+  `-q` keeps the old compact form (counts + latest outcomes);
+  `-v` adds card bodies, results for done/failed cards, parent
+  links and failure counts, and a longer journal digest. `/board`
+  in chat uses the default level (`/board full` for the verbose
+  one). The sa_status tool payload is unchanged.
+
 ## 0.12.2 — 2026-11-01
 
 - **The suite's slash commands actually exist now: `/board` and

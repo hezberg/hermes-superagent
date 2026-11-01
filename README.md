@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.12.2.** The dispatch chain is verified end-to-end on a
+> **Status: v0.13.0.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). The suite is built from Hermes'
 > own mechanisms wherever they exist, keeps no provider system of
@@ -114,8 +114,10 @@ every card carries its goal and completion contract with it.
 - The same board in a browser: `hermes dashboard` starts Hermes'
   web dashboard — the kanban board is one of its views, and the
   easiest way to read a busy board at a glance.
-- `hermes superagent status`: the suite's own summary — profiles,
-  board counts, recent journal.
+- `hermes superagent status`: the whole board as text, grouped
+  by status with assignees, priorities and ages. `-q` shrinks it
+  to counts and latest outcomes; `-v` adds card bodies, results,
+  parent links and a longer journal.
 - From Feishu there is nothing to poll: a card created from chat
   pushes its result back into the same conversation when it
   finishes. Cards dispatched from the CLI are covered by the
