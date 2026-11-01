@@ -192,3 +192,74 @@ class TestWizardNamedProvider(WizardCase):
         self.assertEqual(cfg["router"]["provider"], "workbuddy")
         self.assertEqual(cfg["router"]["model"], "cn:deepseek-v4.1-flash")
         self.assertEqual(ui.answers, [])  # every answer consumed as scripted
+
+
+class TestStyle(unittest.TestCase):
+    def make(self, enabled):
+        lines = []
+        return wizard.Prompter(input_fn=lambda p="": "1",
+                               out=lines.append,
+                               style=wizard.Style(enabled=enabled)), lines
+
+    def test_color_on_marks_errors_and_defaults(self):
+        ui, lines = self.make(True)
+        ui.error("STOP: something")
+        ui.choose("Pick", ["alpha", "beta"], default=1)
+        blob = "\n".join(lines)
+        self.assertIn("\033[1;31m", blob)
+        self.assertIn("✗ STOP:", blob)
+        self.assertIn("← default", blob)
+
+    def test_color_off_is_plain(self):
+        ui, lines = self.make(False)
+        ui.error("STOP: something")
+        ui.ok("done")
+        blob = "\n".join(lines)
+        self.assertNotIn("\033[", blob)
+        self.assertIn("✗ STOP:", blob)
+
+
+class TestBindPathDuplicates(WizardCase):
+    def setUp(self):
+        super().setUp()
+        with open(os.path.join(self.home, ".env"), "a") as fh:
+            fh.write("FEISHU_APP_ID=cli_dupapp\n")
+        self.setup_ids = ["cli_dupapp", "cli_freshapp"]
+
+    def runner(self, argv, env=None, interactive=False):
+        if "gateway" in argv and "setup" in argv:
+            app_id = self.setup_ids.pop(0)
+            router_env = os.path.join(
+                self.home, "profiles", "sa-router", ".env")
+            os.makedirs(os.path.dirname(router_env), exist_ok=True)
+            with open(router_env, "a") as fh:
+                fh.write(f"FEISHU_APP_ID={app_id}\nFEISHU_APP_SECRET=x\n")
+            return 0, ""
+        return super().runner(argv, env=env, interactive=interactive)
+
+    def test_duplicate_bind_is_a_stop_and_rebind_recovers(self):
+        # feishu via Hermes setup (3), then confirm remove+rebind (""
+        # = default yes), then accept the gateway restart ("").
+        rc, ui = self.run_wizard(["1", "1", "1", "3", "", ""])
+        self.assertEqual(rc, 0, "\n".join(ui.output))
+        self.assertTrue(any("STOP:" in line for line in ui.output))
+        router_env = open(os.path.join(
+            self.home, "profiles", "sa-router", ".env")).read()
+        self.assertIn("FEISHU_APP_ID=cli_freshapp", router_env)
+        self.assertNotIn("cli_dupapp", router_env)
+        cfg = sa._yaml_load(open(os.path.join(
+            self.home, "superagent", "superagent.yaml")).read())
+        self.assertEqual(cfg["entry"]["platform"], "feishu")
+
+    def test_duplicate_bind_removed_when_rebind_declined(self):
+        # decline rebind ("n"), accept removal ("" = default yes)
+        rc, ui = self.run_wizard(["1", "1", "1", "3", "n", ""])
+        self.assertEqual(rc, 1, "\n".join(ui.output))
+        self.assertTrue(any("NOT configured" in line for line in ui.output))
+        router_env_path = os.path.join(
+            self.home, "profiles", "sa-router", ".env")
+        router_env = open(router_env_path).read()
+        self.assertNotIn("FEISHU_APP_ID", router_env)
+        cfg = sa._yaml_load(open(os.path.join(
+            self.home, "superagent", "superagent.yaml")).read())
+        self.assertEqual(cfg["entry"]["platform"], "")

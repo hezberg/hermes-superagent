@@ -1,3 +1,23 @@
+## 0.10.2 — 2026-11-01
+
+- **Wizard: a duplicate Feishu app is a hard stop on EVERY path.**
+  The paste path already refused duplicates; the bind-through-
+  Hermes-setup path only warned and continued (field report: the
+  operator deliberately bound the default profile's app to the
+  router — the wizard waved it through). Now a conflicting bind
+  stops the flow: remove it from the router profile and bind a
+  NEW app (loop), remove it and continue without an entry, or
+  leave it — in which case the wizard records NO entry, says so
+  in the final summary, and exits 1. Credentials are actively
+  removed on the first two choices: leaving them on disk would
+  let the gateway bring the duplicate binding up anyway.
+- **Wizard UI is readable.** Semantic ANSI styling (stdlib only):
+  numbered step headers, bold prompts, cyan option numbers with
+  the default marked in green, errors as bold-red ✗ lines,
+  warnings in yellow, successes as green ✓. Color disables
+  itself off-TTY and under NO_COLOR
+  (SUPERAGENT_WIZARD_COLOR=always|never overrides).
+
 ## 0.10.1 — 2026-11-01
 
 - **Wizard: a menu selection that names its model is final.**

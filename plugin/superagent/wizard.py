@@ -52,26 +52,77 @@ TOP_LEVEL_KEYS = ("version", "router", "workers", "entry", "policy",
 # IO (injectable for tests)
 # ---------------------------------------------------------------------------
 
+class Style:
+    """ANSI styling, stdlib only. A wizard nobody can READ is a
+    wizard nobody finishes: errors, stops, defaults and successes
+    must be visible at a glance. Color turns itself off when the
+    output is not a terminal (pipes, captured test output) or when
+    NO_COLOR is set; SUPERAGENT_WIZARD_COLOR=always|never overrides."""
+
+    CODES = {"bold": "1", "dim": "2", "red": "31", "green": "32",
+             "yellow": "33", "cyan": "36"}
+
+    def __init__(self, enabled=None):
+        if enabled is None:
+            enabled = self._auto()
+        self.enabled = enabled
+
+    @staticmethod
+    def _auto():
+        forced = os.environ.get("SUPERAGENT_WIZARD_COLOR", "")
+        if forced == "always":
+            return True
+        if forced == "never" or os.environ.get("NO_COLOR"):
+            return False
+        try:
+            return sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
+        except Exception:
+            return False
+
+    def __call__(self, text, *names):
+        if not self.enabled or not names:
+            return text
+        codes = ";".join(self.CODES[n] for n in names)
+        return f"\033[{codes}m{text}\033[0m"
+
+
 class Prompter:
-    def __init__(self, input_fn=None, getpass_fn=None, out=None):
+    def __init__(self, input_fn=None, getpass_fn=None, out=None, style=None):
         self._input = input_fn or input
         self._getpass = getpass_fn or getpass.getpass
         self._out = out or print
+        self.style = style if style is not None else Style()
 
     def say(self, msg=""):
         self._out(msg)
 
+    def header(self, step, title):
+        s = self.style
+        self.say("")
+        self.say(s(f"◆ Step {step} — {title}", "bold", "cyan"))
+        self.say(s("─" * (len(f"◆ Step {step} — {title}")), "dim"))
+
+    def error(self, msg):
+        self.say(self.style(f"✗ {msg}", "bold", "red"))
+
+    def warn(self, msg):
+        self.say(self.style(f"! {msg}", "bold", "yellow"))
+
+    def ok(self, msg):
+        self.say(self.style(f"✓ {msg}", "bold", "green"))
+
     def ask(self, prompt, default=""):
         suffix = f" [{default}]" if default else ""
         try:
-            answer = self._input(f"{prompt}{suffix}: ").strip()
+            answer = self._input(
+                f"{self.style(prompt, 'bold')}{self.style(suffix, 'dim')}: ").strip()
         except EOFError:
             return default
         return answer or default
 
     def secret(self, prompt):
         try:
-            return self._getpass(f"{prompt}: ").strip()
+            return self._getpass(f"{self.style(prompt, 'bold')}: ").strip()
         except EOFError:
             return ""
 
@@ -83,10 +134,13 @@ class Prompter:
         return answer in ("y", "yes")
 
     def choose(self, title, options, default=0):
-        self.say(title)
+        s = self.style
+        self.say(s(title, "bold"))
         for i, label in enumerate(options):
-            mark = " *" if i == default else ""
-            self.say(f"  {i + 1}. {label}{mark}")
+            num = s(f"{i + 1}.", "bold", "cyan")
+            mark = s("  ← default", "green") if i == default else ""
+            text = s(label, "bold") if i == default else label
+            self.say(f"  {num} {text}{mark}")
         while True:
             answer = self.ask("Choose", str(default + 1))
             try:
@@ -95,7 +149,7 @@ class Prompter:
                 n = -1
             if 1 <= n <= len(options):
                 return n - 1
-            self.say(f"Please enter a number between 1 and {len(options)}.")
+            self.error(f"Please enter a number between 1 and {len(options)}.")
 
 
 def _default_runner(argv, env=None, interactive=False):
@@ -250,6 +304,22 @@ def set_entry_section(text, platform, user_id="", chat_id=""):
     return _replace_section(text, "entry", section)
 
 
+def remove_env_keys(path, keys):
+    """Delete KEY= lines from a .env file, preserving everything
+    else. Used to unbind a conflicting platform app from a profile:
+    leaving the credentials on disk would let the gateway bring the
+    duplicate binding up anyway, wizard or no wizard."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().split("\n")
+    except OSError:
+        return
+    kept = [line for line in lines
+            if not any(line.strip().startswith(k + "=") for k in keys)]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(kept).rstrip("\n") + "\n")
+
+
 def upsert_env_lines(path, pairs):
     """Insert or replace KEY=value lines in a .env file, preserving
     everything else. Used for the router profile's platform
@@ -297,19 +367,20 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
     os.environ["HERMES_HOME"] = home  # package helpers resolve home from env
     say = ui.say
 
-    say("hermes-superagent — setup wizard")
-    say("=" * 34)
+    say(ui.style("hermes-superagent — setup wizard", "bold", "cyan"))
+    say(ui.style("=" * 34, "dim"))
+    ui.header(1, "Hermes readiness")
 
     # -- 1. Hermes itself ------------------------------------------------
     hermes = shutil.which("hermes")
     if not hermes:
-        say("Hermes is not installed (no `hermes` on PATH). This suite")
+        ui.error("Hermes is not installed (no `hermes` on PATH). This suite")
         say("builds on Hermes and does not install it. Install Hermes")
         say("first (https://hermes-agent.nousresearch.com), then re-run")
         say("this wizard.")
         return 2
     rc, out = run([hermes, "--version"], env=env)
-    say(f"Hermes: {out.strip().splitlines()[0] if out.strip() else 'found'}")
+    say(ui.style(f"Hermes: {out.strip().splitlines()[0] if out.strip() else 'found'}", "dim"))
 
     default_cfg = {}
     raw_default = _read(os.path.join(home, "config.yaml"))
@@ -324,17 +395,17 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
     if problem:
         kind, detail = problem
         if kind == "unconfigured":
-            say(f"Cannot continue: {detail}.")
+            ui.error(f"Cannot continue: {detail}.")
             say("Run Hermes' own setup first — `hermes setup` (or")
             say("`hermes model` to pick a model) — then re-run this wizard.")
         else:
-            say(f"Cannot continue: the default model's key variable {detail}")
+            ui.error(f"Cannot continue: the default model's key variable {detail}")
             say("has no value. Add one line to ~/.hermes/.env:")
             say(f"  {detail}=<your key>")
             say("then re-run this wizard. (An empty or missing key passes")
             say("every naive check and fails only at the first real request.)")
         return 2
-    say("Default Hermes profile: ready.")
+    ui.ok("Default Hermes profile: ready.")
 
     # -- 2. Existing config as defaults ----------------------------------
     suite_dir_path = os.path.join(home, "superagent")
@@ -354,7 +425,8 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
         topo_default = 1
     elif existing_workers and set(existing_workers) != {"general"}:
         topo_default = 2
-    choice = ui.choose("Workers — which profiles should exist?", [
+    ui.header(2, "Workers")
+    choice = ui.choose("Which profiles should exist?", [
         "Just the general worker (recommended: one worker takes every card)",
         "All three: general + research + deep",
         "Pick individually",
@@ -382,6 +454,7 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
     menu_labels = ["Inherit the default profile's model"] + [
         f"{item['select']} — {item['detail']}" for item in menu
     ]
+    ui.header(3, "Models")
     roles = [("Router", router_profile, "router")]
     roles += [(f"Worker {n}", WORKER_PRESETS[n]["profile"], n) for n in worker_names]
     selections = {}
@@ -411,14 +484,16 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
         var = (items_by_select.get(provider) or {}).get("key_var") or ""
         if var and not _env_value(global_env_text, var) \
                 and not environ.get(var):
-            say(f"  ! {profile}: provider {provider} reads its key from "
+            ui.warn(f"{profile}: provider {provider} reads its key from "
                 f"{var}, which has no value in ~/.hermes/.env — add "
                 f"{var}=<key> there, or the role cannot call its model.")
 
     # -- 5. Feishu entry ---------------------------------------------------
     entry_platform = ""
+    entry_failed = ""
     delivery = ""
-    feishu_choice = ui.choose("Chat entry — talk to the Router from chat?", [
+    ui.header(4, "Chat entry")
+    feishu_choice = ui.choose("Talk to the Router from chat?", [
         "No chat entry (CLI only)",
         "Feishu — paste a NEW dedicated app's App ID + Secret",
         "Feishu — bind through Hermes' own setup (it offers QR binding)",
@@ -437,8 +512,8 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
                 conflicts = find_app_id_conflicts(
                     home, app_id, exclude_profile=router_profile)
                 if conflicts:
-                    say(f"STOP: App ID {app_id} is already used by "
-                        f"{', '.join(conflicts)}.")
+                    ui.error(f"STOP: App ID {app_id} is already used by "
+                             f"{', '.join(conflicts)}.")
                     say("One Feishu app serves exactly one profile — two")
                     say("profiles on one app fight over its events. Create a")
                     say("NEW app in the Feishu developer console for the")
@@ -446,6 +521,7 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
                     if not ui.confirm("Enter a different App ID?", default=True):
                         entry_platform = ""
                         delivery = ""
+                        entry_failed = "duplicate App ID, no replacement entered"
                         break
                     continue
                 secret = ui.secret("Feishu App Secret (hidden, stored only in the router profile's .env)")
@@ -453,31 +529,66 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
                     say("No secret entered — skipping the Feishu entry.")
                     entry_platform = ""
                     delivery = ""
+                    entry_failed = "no App Secret entered"
                     break
                 upsert_env_lines(router_env, {
                     "FEISHU_APP_ID": app_id, "FEISHU_APP_SECRET": secret})
-                say("Credentials stored in the router profile's .env.")
+                ui.ok("Credentials stored in the router profile's .env.")
                 break
         else:
-            say("Launching Hermes' own setup for the router profile —")
-            say("follow its prompts (QR binding is offered there).")
-            run([hermes, "--profile", router_profile, "gateway", "setup"],
-                env=env, interactive=True)
-            bound_id = _env_value(_read(router_env), "FEISHU_APP_ID")
-            if not bound_id:
-                say("No FEISHU_APP_ID landed in the router profile — the")
-                say("entry is NOT wired. Re-run the wizard when ready.")
-                entry_platform = ""
-                delivery = ""
-            else:
+            # Bind through Hermes' own setup, then apply the SAME
+            # hard rule as the paste path: a duplicate app is a
+            # stop, not a warning. The conflicting credentials must
+            # not stay on disk either — the gateway would bring the
+            # duplicate binding up regardless of what the wizard
+            # decided.
+            while True:
+                say("Launching Hermes' own setup for the router profile —")
+                say("follow its prompts (QR binding is offered there).")
+                run([hermes, "--profile", router_profile, "gateway", "setup"],
+                    env=env, interactive=True)
+                bound_id = _env_value(_read(router_env), "FEISHU_APP_ID")
+                if not bound_id:
+                    say("No FEISHU_APP_ID landed in the router profile — the")
+                    say("entry is NOT wired. Re-run the wizard when ready.")
+                    entry_platform = ""
+                    delivery = ""
+                    entry_failed = "Hermes setup bound no app"
+                    break
                 conflicts = find_app_id_conflicts(
                     home, bound_id, exclude_profile=router_profile)
-                if conflicts:
-                    say(f"WARNING: the bound app {bound_id} is also used by")
-                    say(f"{', '.join(conflicts)} — one app serves one profile;")
-                    say("expect event conflicts until one side gets its own app.")
+                if not conflicts:
+                    ui.ok(f"Bound app {bound_id} to {router_profile}.")
+                    break
+                ui.error(f"STOP: the app you just bound ({bound_id}) is already")
+                say(f"used by {', '.join(conflicts)}. One Feishu app serves")
+                say("exactly one profile — two profiles on one app fight")
+                say("over its event stream, so this binding cannot stand.")
+                if ui.confirm(
+                        "Remove it from the router profile and bind a NEW app?",
+                        default=True):
+                    remove_env_keys(router_env,
+                                    ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
+                    say("Removed. Create a NEW app in the Feishu developer")
+                    say("console first if you have not, then bind that one.")
+                    continue
+                if ui.confirm(
+                        "Remove it and continue WITHOUT a Feishu entry?",
+                        default=True):
+                    remove_env_keys(router_env,
+                                    ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
+                    say("Removed from the router profile.")
+                else:
+                    say("Left in place at your choice — the duplicate WILL")
+                    say("conflict at the gateway until one profile gets its")
+                    say("own app. The wizard will not record this entry.")
+                entry_platform = ""
+                delivery = ""
+                entry_failed = f"bound app {bound_id} duplicates another profile"
+                break
 
     # -- 6. Write the config ----------------------------------------------
+    ui.header(5, "Install")
     base_text = existing_text or _read(os.path.join(repo, "config", "superagent.yaml"))
     text = _replace_section(base_text, "workers", workers_section(worker_names))
     text = set_entry_section(text, entry_platform)
@@ -494,14 +605,16 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
     rc, out = run([sys.executable, installer], env=env)
     say(out.rstrip())
     if rc != 0:
-        say("The installer did not complete — fix the item above and")
+        ui.error("The installer did not complete — fix the item above and")
         say("re-run this wizard (your choices are saved in the config).")
         return rc
 
     # -- 8. Kanban + delivery ----------------------------------------------
     rc, _out = run([hermes, "kanban", "init"], env=env)
-    say("Kanban board: " + ("ready." if rc == 0 else
-                            "init returned an error — check `hermes kanban init`."))
+    if rc == 0:
+        ui.ok("Kanban board: ready.")
+    else:
+        ui.warn("Kanban board: init returned an error — check `hermes kanban init`.")
     if delivery:
         rc, out = run([hermes, "cron", "list"], env=env)
         job_id = None
@@ -525,14 +638,19 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
         findings = _doctor_findings()
         errors = [f for f in findings if f.get("level") == "error"]
         warns = [f for f in findings if f.get("level") == "warn"]
-        for f in errors + warns:
-            say(f"  [{f['level']}] {f['text']}")
+        ui.header(6, "Verify")
+        for f in errors:
+            ui.error(f["text"])
+            if f.get("fix"):
+                say(f"        fix: {f['fix']}")
+        for f in warns:
+            ui.warn(f["text"])
             if f.get("fix"):
                 say(f"        fix: {f['fix']}")
         if errors:
-            say("Installed, but doctor reports errors — resolve them above.")
+            ui.error("Installed, but doctor reports errors — resolve them above.")
             return 1
-        say("Doctor: all checks pass.")
+        ui.ok("Doctor: all checks pass.")
     except Exception:
         say("Doctor check could not run here; run `hermes superagent doctor`.")
 
@@ -542,7 +660,12 @@ def run_wizard(home, repo, prompter=None, runner=None, environ=None):
         run([hermes, "gateway", "restart"], env=env)
         say("Gateway restarted.")
     say("")
-    say("You are set. Talk to the Router:")
+    if entry_failed:
+        ui.error(f"Feishu entry: NOT configured — {entry_failed}.")
+        say("Everything else is installed and usable from the CLI; re-run")
+        say("`hermes superagent setup` with a dedicated app to finish it.")
+        return 1
+    ui.ok("You are set. Talk to the Router:")
     say(f"  hermes --profile {router_profile}")
     if entry_platform:
         say(f"  or DM your new {entry_platform} bot — its answers come from the Router,")
