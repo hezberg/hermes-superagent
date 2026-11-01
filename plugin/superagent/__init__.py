@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.6.0"
+PLUGIN_VERSION = "0.6.1"
 
 
 # --------------------------------------------------------------------------
@@ -575,10 +575,45 @@ def _cli_setup(parser):
     recall.add_argument("query", nargs="*", help="Keyword(s) to search for")
     sub.add_parser("reminders", help="Show the reminder ledger for unclosed work")
     sub.add_parser("upgrade", help="Upgrade the suite in place (pulls its source, re-runs the installer)")
+    set_model = sub.add_parser(
+        "set-model", help="Set one profile's model in superagent.yaml and apply it now")
+    set_model.add_argument("profile", help="Profile name, e.g. sa-worker-deep")
+    set_model.add_argument("model", help="Model name, or 'inherit' to use the default profile's model")
 
 
 def _cli_handler(args):
     sub = getattr(args, "subcommand", None) or "status"
+    if sub not in ("upgrade", "set-model"):
+        # A hand-edited config applies itself on the next command;
+        # nobody should have to remember a separate apply step.
+        try:
+            from .reconcile import maybe_reconcile
+
+            result = maybe_reconcile(hermes_home(), suite_dir(), interactive=True)
+            if result["status"] == "reconciled":
+                print("(Applied your superagent.yaml changes first.)")
+            elif result["status"] == "failed" and result.get("message"):
+                print(result["message"])
+        except Exception:
+            pass
+    if sub == "set-model":
+        from .reconcile import maybe_reconcile, set_role_model
+
+        model = "" if args.model == "inherit" else args.model
+        if not set_role_model(suite_dir(), args.profile, model):
+            known = []
+            cfg = load_suite_config()
+            if (cfg.get("router") or {}).get("profile"):
+                known.append(cfg["router"]["profile"])
+            known += [w.get("profile") for w in cfg.get("workers") or [] if w.get("profile")]
+            print(f"No role with profile '{args.profile}'. Known: {', '.join(known) or '(none)'}")
+            return 1
+        result = maybe_reconcile(hermes_home(), suite_dir(), interactive=True)
+        if result["status"] == "failed":
+            print(result.get("message") or "The change was saved but could not be applied.")
+            return 1
+        print(f"{args.profile}: model set to {model or '(inherit the default profile)'} and applied.")
+        return 0
     if sub == "doctor":
         from .doctor import summarize
 

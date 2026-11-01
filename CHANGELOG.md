@@ -1,3 +1,16 @@
+## 0.6.1 — 2026-11-01
+
+- **Config edits apply themselves.** Requiring `upgrade` after
+  editing superagent.yaml was a ritual, not a mechanism (operator's
+  verdict). The suite now reconciles on its own: any
+  `hermes superagent` command, and the reminder tick within one
+  cycle, re-renders the profiles when the config is newer than the
+  install state. A failed apply is reported once per config
+  version, never spammed.
+- **`hermes superagent set-model <profile> <model>`**: one command
+  edits superagent.yaml (as a comment-preserving text edit) and
+  applies it. `inherit` clears the override.
+
 # Changelog
 
 ## 0.6.0 — 2026-11-01

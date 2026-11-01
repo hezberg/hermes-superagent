@@ -34,6 +34,18 @@ def main():
         return 0  # suite not importable: stay silent, never spam errors
 
     try:
+        # Config edits apply themselves: if superagent.yaml is newer
+        # than the install, reconcile before anything reads the
+        # profiles. A failure is spoken once per config version.
+        from superagent.reconcile import maybe_reconcile
+
+        result = maybe_reconcile(home, os.path.join(home, "superagent"))
+        if result["status"] == "failed" and result.get("message"):
+            print(result["message"])
+    except Exception:
+        pass
+
+    try:
         sa.sync_journal()
         cfg = sa.load_suite_config()
         wd = cfg.get("watchdog") or {}

@@ -218,8 +218,8 @@ def check_install_drift(manifest_version, running_version, config_mtime, install
     if config_mtime and installed_epoch and config_mtime > installed_epoch + 1:
         out.append(_finding(
             "warn",
-            "superagent.yaml was edited after the last install - the changes are not rendered into the profiles yet; the old config is still in effect.",
-            "Re-run the installer to apply the changes.",
+            "superagent.yaml was edited after the last install and the edit has not been applied - automatic apply may have failed; the old config is still in effect.",
+            "Fix any config problem doctor reports, then run hermes superagent status (applies edits) or hermes superagent upgrade.",
         ))
     return out
 

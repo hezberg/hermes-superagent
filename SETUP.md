@@ -93,7 +93,13 @@ operator step (entering keys). Ask for one confirmation.
    `python3 scripts/validate_config.py ~/.hermes/superagent/superagent.yaml`
    — fix every ERROR before continuing. (A filled staging file may
    still be passed once via `--config` to seed the suite config;
-   after that it is ignored, by design.)
+   after that it is ignored, by design.) **Later edits apply
+   themselves**: the next `hermes superagent` command — or the
+   reminder tick, within one cycle — re-renders the profiles; there
+   is no separate apply step to remember. For a model change
+   specifically, one command does the edit and the apply:
+   `hermes superagent set-model sa-worker-deep <model-name>`
+   (`inherit` as the name clears the override).
 3. **Operator step — the only one that must happen outside the
    agent.** Send one message with the exact line(s) for the operator
    to add to `~/.hermes/.env` in their own editor or terminal, one
