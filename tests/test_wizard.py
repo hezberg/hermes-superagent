@@ -341,3 +341,42 @@ class TestTransactionalWizard(WizardCase):
         self.assertEqual(rc, 130)
         with open(router_env) as fh:
             self.assertEqual(fh.read(), "PREEXISTING=1\n")
+
+
+class TestBindNothingBound(WizardCase):
+    """Hermes' inner setup can end with nothing bound (another
+    platform chosen, or the step skipped). Step 4 must fail loudly
+    and loop back, not carry on entry-less."""
+
+    def setUp(self):
+        super().setUp()
+        self.setup_calls = 0
+
+    def runner(self, argv, env=None, interactive=False):
+        if "gateway" in argv and "setup" in argv:
+            self.setup_calls += 1
+            if self.setup_calls >= 2:  # second attempt binds properly
+                router_env = os.path.join(
+                    self.home, "profiles", "sa-router", ".env")
+                os.makedirs(os.path.dirname(router_env), exist_ok=True)
+                with open(router_env, "a") as fh:
+                    fh.write("FEISHU_APP_ID=cli_second_try\nFEISHU_APP_SECRET=x\n")
+            return 0, ""
+        return super().runner(argv, env=env, interactive=interactive)
+
+    def test_nothing_bound_loops_back_and_recovers(self):
+        # feishu via setup (3); recovery menu: retry (1); restart yes ("")
+        rc, ui = self.run_wizard(["1", "1", "1", "3", "1", ""])
+        self.assertEqual(rc, 0, "\n".join(ui.output))
+        self.assertEqual(self.setup_calls, 2)
+        self.assertTrue(any("NO Feishu app was" in line for line in ui.output))
+        cfg = sa._yaml_load(open(os.path.join(
+            self.home, "superagent", "superagent.yaml")).read())
+        self.assertEqual(cfg["entry"]["platform"], "feishu")
+
+    def test_nothing_bound_then_give_up(self):
+        # recovery menu: give up (3) — explicit, recorded as failed
+        rc, ui = self.run_wizard(["1", "1", "1", "3", "3"])
+        self.assertEqual(rc, 1, "\n".join(ui.output))
+        self.assertEqual(self.setup_calls, 1)
+        self.assertTrue(any("NOT configured" in line for line in ui.output))

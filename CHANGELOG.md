@@ -1,3 +1,15 @@
+## 0.11.1 — 2026-11-01
+
+- **Wizard step 4: binding nothing is a failed step, not a
+  shrug.** Through Hermes' own setup the operator can pick a
+  different platform — or skip — and produce no Feishu parameters
+  at all; the wizard used to note "not wired" and carry on. Now
+  it errors at the step and loops back into step 4: run the setup
+  again and bind Feishu, switch to pasting a dedicated app's
+  credentials, or explicitly give the entry up (recorded as a
+  failed entry, exit 1 at the end). The paste flow is shared by
+  both routes now (extracted as one helper).
+
 ## 0.11.0 — 2026-11-01
 
 - **The wizard is transactional.** Until its single commit point

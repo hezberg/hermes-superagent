@@ -298,6 +298,39 @@ def workers_section(names):
     return "\n".join(lines)
 
 
+def _paste_feishu(ui, home, router_profile):
+    """The paste-a-dedicated-app flow. Returns (pending, failed):
+    pending is the staged {FEISHU_APP_ID, FEISHU_APP_SECRET} dict on
+    success; failed is the reason string when the operator gives up
+    inside the flow."""
+    say = ui.say
+    while True:
+        app_id = ui.ask("Feishu App ID (of the NEW app)")
+        if not app_id.startswith("cli_"):
+            say("That does not look like a Feishu App ID (they start")
+            say("with cli_). Try again.")
+            continue
+        conflicts = find_app_id_conflicts(
+            home, app_id, exclude_profile=router_profile)
+        if conflicts:
+            ui.error(f"STOP: App ID {app_id} is already used by "
+                     f"{', '.join(conflicts)}.")
+            say("One Feishu app serves exactly one profile — two")
+            say("profiles on one app fight over its events. Create a")
+            say("NEW app in the Feishu developer console for the")
+            say("Router, then enter its App ID.")
+            if not ui.confirm("Enter a different App ID?", default=True):
+                return None, "duplicate App ID, no replacement entered"
+            continue
+        secret = ui.secret("Feishu App Secret (hidden, stored only in the router profile's .env)")
+        if not secret:
+            say("No secret entered — skipping the Feishu entry.")
+            return None, "no App Secret entered"
+        ui.ok("Credentials noted — they are written to the router")
+        say("profile's .env only when the setup commits (step 5).")
+        return {"FEISHU_APP_ID": app_id, "FEISHU_APP_SECRET": secret}, ""
+
+
 def _replace_section(text, key, new_section):
     """Replace a top-level YAML section (from `key:` to the next
     top-level key) with new text; append when absent."""
@@ -609,39 +642,11 @@ def _run_wizard(home, repo, ui, run, environ, state, fetcher):
         delivery = "feishu"
         router_env = state["router_env"]
         if feishu_choice == 1:
-            while True:
-                app_id = ui.ask("Feishu App ID (of the NEW app)")
-                if not app_id.startswith("cli_"):
-                    say("That does not look like a Feishu App ID (they start")
-                    say("with cli_). Try again.")
-                    continue
-                conflicts = find_app_id_conflicts(
-                    home, app_id, exclude_profile=router_profile)
-                if conflicts:
-                    ui.error(f"STOP: App ID {app_id} is already used by "
-                             f"{', '.join(conflicts)}.")
-                    say("One Feishu app serves exactly one profile — two")
-                    say("profiles on one app fight over its events. Create a")
-                    say("NEW app in the Feishu developer console for the")
-                    say("Router, then enter its App ID.")
-                    if not ui.confirm("Enter a different App ID?", default=True):
-                        entry_platform = ""
-                        delivery = ""
-                        entry_failed = "duplicate App ID, no replacement entered"
-                        break
-                    continue
-                secret = ui.secret("Feishu App Secret (hidden, stored only in the router profile's .env)")
-                if not secret:
-                    say("No secret entered — skipping the Feishu entry.")
-                    entry_platform = ""
-                    delivery = ""
-                    entry_failed = "no App Secret entered"
-                    break
-                pending_feishu = {
-                    "FEISHU_APP_ID": app_id, "FEISHU_APP_SECRET": secret}
-                ui.ok("Credentials noted — they are written to the router")
-                say("profile's .env only when the setup commits (step 5).")
-                break
+            pending_feishu, entry_failed = _paste_feishu(
+                ui, home, router_profile)
+            if pending_feishu is None:
+                entry_platform = ""
+                delivery = ""
         else:
             # Bind through Hermes' own setup, then apply the SAME
             # hard rule as the paste path: a duplicate app is a
@@ -656,11 +661,34 @@ def _run_wizard(home, repo, ui, run, environ, state, fetcher):
                     env=env, interactive=True)
                 bound_id = _env_value(_read(router_env), "FEISHU_APP_ID")
                 if not bound_id:
-                    say("No FEISHU_APP_ID landed in the router profile — the")
-                    say("entry is NOT wired. Re-run the wizard when ready.")
+                    # The operator picked Feishu binding but the
+                    # inner setup produced NO Feishu parameters
+                    # (another platform chosen, or the step was
+                    # skipped). That is a failed step, not a
+                    # shrug: error out and send them back into
+                    # step 4 to do it again, switch methods, or
+                    # explicitly give the entry up.
+                    ui.error("Hermes setup finished, but NO Feishu app was")
+                    say("bound to the router profile — inside that setup you")
+                    say("must pick Feishu and complete its binding; choosing")
+                    say("another platform, or skipping, leaves nothing to wire.")
+                    nxt = ui.choose("Step 4 again — how do you proceed?", [
+                        "Run Hermes setup again — and bind Feishu this time",
+                        "Paste a NEW dedicated app's App ID + Secret instead",
+                        "Give up the chat entry and continue without it",
+                    ], default=0)
+                    if nxt == 0:
+                        continue
+                    if nxt == 1:
+                        pending_feishu, entry_failed = _paste_feishu(
+                            ui, home, router_profile)
+                        if pending_feishu is None:
+                            entry_platform = ""
+                            delivery = ""
+                        break
                     entry_platform = ""
                     delivery = ""
-                    entry_failed = "Hermes setup bound no app"
+                    entry_failed = "no Feishu app was bound in Hermes setup"
                     break
                 conflicts = find_app_id_conflicts(
                     home, bound_id, exclude_profile=router_profile)
