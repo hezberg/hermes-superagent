@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1 — 2026-11-01
+
+- **`hermes superagent upgrade`.** Field lesson, same morning: the
+  upgrade runbook depended on the operator remembering where the
+  source checkout lives — on the operator's machine it did not exist
+  at the assumed path, so several "installs" silently never ran
+  while diagnostics chased the old plugin. An installed suite now
+  upgrades itself: state.json records `source_repo` + `repo_url` at
+  install time; the upgrade command pulls the recorded checkout —
+  or, if it is gone, maintains its own clone at
+  `~/.hermes/superagent/src` — and runs that installer against the
+  home. The operator's filing system is no longer part of the
+  upgrade path.
+
 ## 0.5.0 — 2026-11-01
 
 The install/update system, rebuilt instead of patched (operator's

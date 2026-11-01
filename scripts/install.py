@@ -50,6 +50,21 @@ def repo_version():
         return "0.0.0"
 
 
+def repo_url():
+    """The clone's origin URL, for state.json; canonical fallback."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", REPO, "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=10,
+        )
+        url = (result.stdout or "").strip()
+        if url:
+            return url
+    except Exception:
+        pass
+    return "https://github.com/hezberg/hermes-superagent.git"
+
+
 # ------------------------------------------------------------------ config
 def is_pristine(cfg):
     """True when nothing user-specific has been filled in yet."""
@@ -473,6 +488,10 @@ def main(argv=None):
         "router": router,
         "files": files,
         "created_paths": created_paths,
+        # Where this install came from, so `hermes superagent upgrade`
+        # never has to ask the operator where the checkout lives.
+        "source_repo": REPO,
+        "repo_url": repo_url(),
     }
     if not args.dry_run:
         os.makedirs(suite_dir, exist_ok=True)

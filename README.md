@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.5.0.** The dispatch chain is verified end-to-end on a
+> **Status: v0.5.1.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). On top of the v0.1 skeleton (layout,
 > configuration system, plugin registration, profile rendering,
@@ -95,6 +95,14 @@ config and history are kept unless you pass `--purge`):
 
 ```bash
 ./uninstall.sh
+```
+
+Upgrading later does not need the checkout at all — the installed
+suite upgrades itself (it records where its source lives, and keeps
+its own clone if that is ever lost):
+
+```bash
+hermes superagent upgrade
 ```
 
 ## Layout

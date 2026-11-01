@@ -59,7 +59,7 @@ class TestPluginRegister(unittest.TestCase):
 
     def test_status_tool_returns_json(self):
         payload = json.loads(self.ctx.tools["sa_status"]({}))
-        self.assertEqual(payload["plugin_version"], "0.5.0")
+        self.assertEqual(payload["plugin_version"], "0.5.1")
         self.assertEqual(payload["accept_mode"], "observe")
         self.assertFalse(payload["config_loaded"])  # nothing installed in tmp home
         self.assertIsNone(payload["board"])  # no kanban.db yet

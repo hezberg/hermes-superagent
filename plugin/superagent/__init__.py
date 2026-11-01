@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.5.0"
+PLUGIN_VERSION = "0.5.1"
 
 
 # --------------------------------------------------------------------------
@@ -571,6 +571,7 @@ def _cli_setup(parser):
     recall = sub.add_parser("recall", help="Search past outcomes in the journal")
     recall.add_argument("query", nargs="*", help="Keyword(s) to search for")
     sub.add_parser("reminders", help="Show the reminder ledger for unclosed work")
+    sub.add_parser("upgrade", help="Upgrade the suite in place (pulls its source, re-runs the installer)")
 
 
 def _cli_handler(args):
@@ -657,6 +658,11 @@ def _cli_handler(args):
                 f"count={cand['count']}（已落台账与 outbox；投递由 cron/Router 完成）"
             )
         return 0
+    if sub == "upgrade":
+        from .upgrade import run_upgrade
+
+        print("正在升级 hermes-superagent（源码拉取 + 安装器收敛）……")
+        return run_upgrade(hermes_home(), suite_dir())
     if sub == "reminders":
         from .reminders import ReminderLedger
 
