@@ -38,10 +38,10 @@ _RUN_START_EVENTS = {"created", "claimed", "spawned", "reopened", "unblocked"}
 _TERMINAL_STATUS_OUTCOME = {"done": "ready", "blocked": "blocked", "archived": "dropped"}
 
 OUTCOME_WORDS = {
-    "ready": "完成",
-    "blocked": "被阻塞",
-    "failed": "失败",
-    "dropped": "已归档",
+    "ready": "done",
+    "blocked": "blocked",
+    "failed": "failed",
+    "dropped": "archived",
 }
 
 
@@ -107,7 +107,7 @@ def _fmt_ts(ts):
     try:
         return datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M")
     except (TypeError, ValueError, OSError):
-        return "时间未知"
+        return "unknown time"
 
 
 def _one_line(text, limit=160):
@@ -119,15 +119,15 @@ def render_digest(entries, limit=8):
     """Prose digest of the most recent outcomes, for chat surfaces."""
     recent = list(entries or [])[-limit:]
     if not recent:
-        return "最近还没有已结束的任务记录。"
-    lines = ["最近的任务成果："]
+        return "No finished tasks recorded yet."
+    lines = ["Recent task outcomes:"]
     for e in reversed(recent):
         word = OUTCOME_WORDS.get(e.get("outcome"), e.get("outcome") or "")
-        who = e.get("assignee") or "未指派"
+        who = e.get("assignee") or "unassigned"
         line = f"- [{_fmt_ts(e.get('ts'))}] {e.get('title')} — {who} {word}"
         summary = _one_line(e.get("summary"))
         if summary:
-            line += f"：{summary}"
+            line += f": {summary}"
         lines.append(line)
     return "\n".join(lines)
 
@@ -153,18 +153,18 @@ def render_journal_md(entries):
     lines = [
         "# Super-agent journal",
         "",
-        "已结束任务的持久记录：谁做的、结果如何、交付物在哪。由 hermes-superagent 自动维护。",
+        "A durable record of finished tasks: who did them, how they ended, and where the deliverables are. Maintained automatically by hermes-superagent.",
         "",
     ]
     for e in reversed(list(entries or [])):
         word = OUTCOME_WORDS.get(e.get("outcome"), e.get("outcome") or "")
         lines.append(f"## [{_fmt_ts(e.get('ts'))}] {e.get('title')}")
         lines.append(
-            f"- 结果：{word} · 执行：{e.get('assignee') or '未指派'} · 任务：`{e.get('task_id')}`"
+            f"- Outcome: {word} | By: {e.get('assignee') or 'unassigned'} | Task: `{e.get('task_id')}`"
         )
         if e.get("summary"):
-            lines.append(f"- 摘要：{e['summary']}")
+            lines.append(f"- Summary: {e['summary']}")
         for art in e.get("artifacts") or []:
-            lines.append(f"- 交付物：{art}")
+            lines.append(f"- Artifacts: {art}")
         lines.append("")
     return "\n".join(lines)

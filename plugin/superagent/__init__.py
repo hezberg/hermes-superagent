@@ -24,7 +24,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.5.2"
+PLUGIN_VERSION = "0.5.3"
 
 
 # --------------------------------------------------------------------------
@@ -581,11 +581,11 @@ def _cli_handler(args):
 
         findings = _doctor_findings()
         marks = {"ok": "✓", "warn": "⚠", "error": "✗"}
-        print("superagent 体检：")
+        print("superagent doctor:")
         for f in findings:
             print(f"{marks.get(f['level'], '?')} {f['text']}")
             if f.get("fix"):
-                print(f"  修法：{f['fix']}")
+                print(f"  Fix: {f['fix']}")
         print(summarize(findings))
         return 1 if any(f["level"] == "error" for f in findings) else 0
     if sub == "recall":
@@ -594,13 +594,13 @@ def _cli_handler(args):
         sync_journal()
         query = " ".join(getattr(args, "query", None) or []).strip()
         if not query:
-            print("用法：hermes superagent recall <关键词>——在历史成果里找相关的任务。")
+            print("Usage: hermes superagent recall <keyword> - search past outcomes in the journal.")
             return 2
         matches = search_entries(journal_entries(), query)
         if not matches:
-            print(f"没有找到和「{query}」相关的历史成果。")
+            print(f"No past outcomes match '{query}'.")
             return 0
-        print(f"和「{query}」相关的历史成果（{len(matches)} 条）：")
+        print(f"Past outcomes matching '{query}' ({len(matches)}):")
         print(render_digest(matches, limit=10))
         return 0
     if sub == "digest":
@@ -608,13 +608,13 @@ def _cli_handler(args):
 
         fresh = sync_journal()
         if fresh:
-            print(f"journal: 记录了 {len(fresh)} 条新成果")
+            print(f"journal: recorded {len(fresh)} new outcome(s)")
         print(render_digest(journal_entries()))
         return 0
     if sub == "watchdog":
         fresh = sync_journal()
         if fresh:
-            print(f"journal: 记录了 {len(fresh)} 条新成果")
+            print(f"journal: recorded {len(fresh)} new outcome(s)")
         from .reports import derive_report, stage_for
         from .watchdog_logic import find_stalled
 
@@ -655,13 +655,13 @@ def _cli_handler(args):
         for cand in due:
             print(
                 f"reminder: due kind={cand['kind']} task={cand['task_id']} "
-                f"count={cand['count']}（已落台账与 outbox；投递由 cron/Router 完成）"
+                f"count={cand['count']} (recorded in the ledger and outbox; delivery is the cron/Router's job)"
             )
         return 0
     if sub == "upgrade":
         from .upgrade import run_upgrade
 
-        print("正在升级 hermes-superagent（源码拉取 + 安装器收敛）……")
+        print("Upgrading hermes-superagent (fetching source + converging)...")
         return run_upgrade(hermes_home(), suite_dir())
     if sub == "reminders":
         from .reminders import ReminderLedger
@@ -671,15 +671,15 @@ def _cli_handler(args):
         ).load()
         rows = state.get("rows", [])
         if not rows:
-            print("提醒台账是空的：还没有提醒过任何未闭环任务。")
+            print("The reminder ledger is empty: no unclosed work has been reminded about yet.")
             return 0
-        print(f"提醒台账（{len(rows)} 条未闭环情况）：")
+        print(f"Reminder ledger ({len(rows)} open situation(s)):")
         for row in rows:
             when = datetime.fromtimestamp(row.get("last_at") or 0).strftime(
                 "%Y-%m-%d %H:%M"
             )
             print(
-                f"- {row['task_id']} · {row['kind']} · 已提醒 {row['count']} 次 · 最近 {when}"
+                f"- {row['task_id']} | {row['kind']} | reminded {row['count']}x | last {when}"
             )
         return 0
     print(status_text())

@@ -221,7 +221,7 @@ def do_rollback(home):
     prev = os.path.join(home, "superagent", "prev")
     meta_path = os.path.join(prev, "prev.json")
     if not os.path.isfile(meta_path):
-        say("没有可回滚的上一代快照（先成功安装过一次才会有）。")
+        say("No previous-generation snapshot to roll back to (one is created by the first successful upgrade).")
         return EXIT_FAIL
     with open(meta_path, encoding="utf-8") as fh:
         meta = json.load(fh)
@@ -233,8 +233,8 @@ def do_rollback(home):
         elif os.path.isfile(src):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy2(src, dst)
-    say(f"已回滚到上一代（版本 {meta.get('version') or '未知'}）。"
-        "重启 gateway 后生效：hermes gateway restart")
+    say(f"Rolled back to the previous generation (version {meta.get('version') or 'unknown'}). "
+        "Restart the gateway to apply: hermes gateway restart")
     return EXIT_OK
 
 
@@ -261,38 +261,39 @@ def resolve_config(home, explicit, dry_run):
                 if not is_pristine(seeded):
                     if not dry_run:
                         shutil.copy2(explicit, suite_cfg)
-                    say("已用 --config 提供的配置覆盖那份空模板。")
+                    say("Replaced the empty template with the config given via --config.")
                     return suite_cfg, seeded, EXIT_OK
-            say("配置还没填：~/.hermes/superagent/superagent.yaml 里还没有"
-                "任何 provider 地址或模型。填好后重新运行同一条命令即可。")
+            say("Config not filled in yet: ~/.hermes/superagent/superagent.yaml has no "
+                "provider URL or models. Fill it in and re-run the same command.")
             return None, None, EXIT_NEEDS_CONFIG
         if explicit and os.path.abspath(explicit) != os.path.abspath(suite_cfg):
-            say("note: 已存在生效配置 ~/.hermes/superagent/superagent.yaml，"
-                "以它为准（--config 只在首次安装时用来播种）。")
+            say("note: an active config already exists at ~/.hermes/superagent/superagent.yaml "
+                "and wins (--config only seeds the first install).")
         return suite_cfg, cfg, EXIT_OK
 
     if explicit:
         if not os.path.isfile(explicit):
-            say(f"ERROR: --config 指定的文件不存在：{explicit}")
+            say(f"ERROR: --config file not found: {explicit}")
             return None, None, EXIT_PREFLIGHT
         cfg = load_yaml(explicit)
         if is_pristine(cfg):
-            say("这份 --config 还是空模板，先填好 provider 和模型再安装。")
+            say("That --config is still the empty template - fill in providers and models first.")
             return None, None, EXIT_NEEDS_CONFIG
         if not dry_run:
             os.makedirs(suite_dir, exist_ok=True)
             shutil.copy2(explicit, suite_cfg)
-        say(f"已把配置播种到 {suite_cfg} —— 以后改配置只改这份。")
+        say(f"Seeded the config to {suite_cfg} - from now on, edit that file only.")
         return suite_cfg, cfg, EXIT_OK
 
     template = os.path.join(REPO, "config", "superagent.yaml")
     if not dry_run:
         os.makedirs(suite_dir, exist_ok=True)
         shutil.copy2(template, suite_cfg)
-    say("第一次安装，先生成你的配置文件：")
+    say("First install: generating your config file:")
     say(f"  {suite_cfg}")
-    say("在里面填上 provider 的 base_url 和每个角色的模型（文件里有注释），"
-        "然后重新运行同一条命令。仓库里不会留下任何你的配置，git pull 永远不会和它冲突。")
+    say("Fill in each provider's base_url and each role's model (the file explains "
+        "itself), then re-run the same command. None of your config lives in the repo "
+        "tree, so git pull can never conflict with it.")
     return None, None, EXIT_NEEDS_CONFIG
 
 
@@ -343,15 +344,15 @@ def main(argv=None):
 
     # ------------------------------------------------------------ preflight
     if not os.path.isdir(home):
-        say(f"ERROR: Hermes home 不存在（{home}）。先运行一次 Hermes。")
+        say(f"ERROR: Hermes home does not exist ({home}). Run Hermes once first.")
         return EXIT_PREFLIGHT
     if shutil.which("hermes") is None and not args.dry_run:
-        say("ERROR: 找不到 hermes 命令。这个套件是 Hermes 的附加层，不自带 Hermes。")
+        say("ERROR: 'hermes' CLI not found. This suite is an add-on to Hermes, not a bundle.")
         return EXIT_PREFLIGHT
     try:
         import yaml  # noqa: F401
     except ImportError:
-        say("ERROR: 当前 python3 没有 PyYAML（Hermes 自带的那份即可）。")
+        say("ERROR: this python3 has no PyYAML (the copy Hermes ships is fine).")
         return EXIT_PREFLIGHT
 
     suite_cfg, cfg, code = resolve_config(home, args.config, args.dry_run)
@@ -364,7 +365,7 @@ def main(argv=None):
         capture_output=True, text=True,
     )
     if result.returncode != 0:
-        say("配置校验没过，先修这几处（都在 ~/.hermes/superagent/superagent.yaml 里）：")
+        say("Config validation failed - fix these (all in ~/.hermes/superagent/superagent.yaml):")
         say((result.stdout or "") + (result.stderr or ""))
         return EXIT_FAIL
 
@@ -411,7 +412,7 @@ def main(argv=None):
         shutil.copytree(plugin_src, staged_plugin,
                         ignore=shutil.ignore_patterns("__pycache__"))
         stamp_version(staged_plugin, version)
-        plugin_status = converge_tree(staged_plugin, plugin_dst, "插件")
+        plugin_status = converge_tree(staged_plugin, plugin_dst, "plugin")
 
         rendered = os.path.join(tmp, "profiles")
         r = subprocess.run(
@@ -421,7 +422,7 @@ def main(argv=None):
             capture_output=True, text=True,
         )
         if r.returncode != 0:
-            say("渲染 profile 失败：")
+            say("Profile rendering failed:")
             say((r.stdout or "") + (r.stderr or ""))
             return EXIT_FAIL
         profile_status = {}
@@ -449,13 +450,13 @@ def main(argv=None):
     with open(tick_src, encoding="utf-8") as fh:
         tick_bytes = fh.read().replace("__HERMES_HOME__", home).encode("utf-8")
     tick_dst = os.path.join(home, "scripts", "superagent-reminder-tick.py")
-    tick_status = converge_file(tick_bytes, tick_dst, "提醒脚本")
+    tick_status = converge_file(tick_bytes, tick_dst, "reminder tick script")
     if tick_status == "updated" and not args.dry_run:
         os.chmod(tick_dst, 0o755)
 
     # ------------------------------------------------------------ ensures
     ensures = []
-    ensures.append(("插件启用", run_hermes(["plugins", "enable", "superagent"], args.dry_run)))
+    ensures.append(("plugin enablement", run_hermes(["plugins", "enable", "superagent"], args.dry_run)))
     ensures.append(("Router kanban（cli）",
                     run_hermes(["-p", router, "tools", "enable", "kanban"], args.dry_run)))
     ensures.append(("Router kanban（feishu）",
@@ -469,7 +470,7 @@ def main(argv=None):
             ["cron", "create", "every 10m", "--no-agent",
              "--script", "superagent-reminder-tick.py"])
         cron_present = cron_created
-    ensures.append(("提醒 cron", cron_present))
+    ensures.append(("reminder cron", cron_present))
 
     # ------------------------------------------------------------ state
     files = {"plugin": tree_hashes(plugin_dst)}
@@ -507,27 +508,27 @@ def main(argv=None):
     # ------------------------------------------------------------ summary
     say("")
     if old_version and old_version != version:
-        say(f"升级完成：{old_version} → {version}")
+        say(f"Upgraded: {old_version} -> {version}")
     elif old_version:
-        say(f"已是最新（{version}），本次为收敛检查")
+        say(f"Already at {version}; this run was a convergence check")
     else:
-        say(f"安装完成：{version}")
+        say(f"Installed: {version}")
     if changes:
-        say("本次变更：" + "、".join(changes))
+        say("Changed: " + ", ".join(changes))
     else:
-        say("本次变更：无（一切已是期望状态）")
+        say("Changed: nothing (everything already at the desired state)")
     soft = [name for name, ok in ensures if not ok]
     if soft:
-        say("这几步没自动完成，不影响主链路，可稍后手动处理：" + "、".join(soft))
+        say("These steps did not complete automatically; they do not affect the main chain and can be done by hand later: " + ", ".join(soft))
     if cron_created:
-        next_steps.append("给提醒 cron 指定投递平台：hermes cron list 找到它，"
-                            "再 hermes cron edit <id> --deliver feishu")
+        next_steps.append("Point the reminder cron at a delivery platform: find it in "
+                            "hermes cron list, then hermes cron edit <id> --deliver feishu")
     for step in next_steps:
-        say(f"下一步：{step}")
-    say("收尾：hermes gateway restart —— 然后就能对 Router 派活了。")
+        say(f"Next step: {step}")
+    say("Finish with: hermes gateway restart - then give the Router a task.")
     if hard_errors:
         say("")
-        say("⚠ 体检发现硬问题，安装不能算完成：")
+        say("WARNING: postflight checks found hard problems; the install does not count as complete:")
         for err in hard_errors:
             say(f"  ✗ {err}")
         return EXIT_FAIL
@@ -556,7 +557,7 @@ def postflight(home, dry_run):
         if f.get("level") != "error":
             continue
         text = f.get("text", "")
-        if "api_key_env" in text or "plugins.enabled" in text or "名单" in text:
+        if "api_key_env" in text or "plugins.enabled" in text or "plugins.disabled" in text:
             steps.append(f.get("fix") or text)
         else:
             hard.append(text)

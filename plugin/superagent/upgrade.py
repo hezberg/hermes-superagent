@@ -67,13 +67,13 @@ def run_upgrade(home, suite_dir, runner=None):
     if mode == "clone":
         code = runner(["git", "clone", url, path])
         if code != 0:
-            print(f"克隆源码失败（{url}）——检查网络后重试，或手动 clone 后跑其中的 install.sh。")
+            print(f"Cloning the source failed ({url}) - check the network and retry, or clone manually and run its install.sh.")
             return code
     else:
         code = runner(["git", "-C", path, "pull", "--ff-only"])
         if code != 0:
-            print("git pull 没成功（可能有本地改动或网络问题），升级停在这里，"
-                  "现有安装未受影响。处理好后重新运行 hermes superagent upgrade。")
+            print("git pull did not succeed (local changes or a network problem). The upgrade "
+                  "stops here; the current install is untouched. Fix it and re-run hermes superagent upgrade.")
             return code
     installer = os.path.join(path, "scripts", "install.py")
     return runner([sys.executable, installer, "--home", home])

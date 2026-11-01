@@ -86,11 +86,11 @@ class TestRender(unittest.TestCase):
         )
         text = render_digest(entries)
         self.assertIn("简报任务", text)
-        self.assertIn("完成", text)
+        self.assertIn("done", text)
         self.assertIn("已交付", text)
 
     def test_digest_empty(self):
-        self.assertIn("还没有", render_digest([]))
+        self.assertIn("No finished tasks", render_digest([]))
 
     def test_journal_md_lists_artifacts(self):
         entries = new_entries(

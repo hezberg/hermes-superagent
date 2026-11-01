@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.3 — 2026-11-01
+
+- **All script and plugin output is English now.** The installer,
+  uninstaller, doctor findings, journal digest, reminder lines, and
+  CLI messages previously printed Chinese prose (an operator-local
+  choice from the first field sessions); every user-facing string
+  has been translated, including the installer's postflight
+  classifier keys. Test fixtures still use Chinese task titles where
+  they stand for user content — that is data, not output.
+
 ## 0.5.2 — 2026-11-01
 
 - **Bootstrap install; nothing lives outside Hermes' directory.**

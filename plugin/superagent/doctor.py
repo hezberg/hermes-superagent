@@ -38,12 +38,12 @@ def check_config_loaded(cfg, router_profile=None, worker_count=0):
     if not cfg:
         return [_finding(
             "error",
-            "套件配置没有加载（~/.hermes/superagent/superagent.yaml 不存在或读不出来）。",
-            "在仓库目录运行 ./install.sh 完成安装；配置只改 superagent.yaml，不要改渲染出的 profile 文件。",
+            "Suite config not loaded (~/.hermes/superagent/superagent.yaml is missing or unreadable).",
+            "Run the installer (bootstrap.sh, or ./install.sh in a checkout) to complete the install; edit only superagent.yaml, never the rendered profile files.",
         )]
     return [_finding(
         "ok",
-        f"配置已加载：Router 是 {router_profile or '?'},共 {worker_count} 个 worker。",
+        f"Config loaded: Router is {router_profile or '?'}, with {worker_count} worker(s).",
     )]
 
 
@@ -54,15 +54,15 @@ def check_key_env(providers, env_present):
         var = (p or {}).get("api_key_env")
         if not var:
             out.append(_finding(
-                "error", f"provider {name} 没有填 api_key_env（应填环境变量名，不是 key 本身）。"))
+                "error", f"provider {name} has no api_key_env (it must name an environment variable, not hold the key itself)."))
         elif not env_present.get(var):
             out.append(_finding(
                 "error",
-                f"环境变量 {var} 在全局和各 profile 的 .env 里都没找到——gateway 会带着占位 key 发请求，必然被拒。",
-                f"把 key 写进 ~/.hermes/.env（一行 {var}=<你的key>），然后 hermes gateway restart。",
+                f"Environment variable {var} is in neither the global .env nor any profile .env - the gateway would send requests with a placeholder key and be rejected.",
+                f"Put the key in ~/.hermes/.env (one line: {var}=<your key>), then hermes gateway restart.",
             ))
         else:
-            out.append(_finding("ok", f"provider {name} 的 key 变量 {var} 已就位。"))
+            out.append(_finding("ok", f"provider {name}: key variable {var} is in place."))
     return out
 
 
@@ -72,24 +72,24 @@ def check_router_toolsets(profile_name, profile_cfg):
     if "toolsets" in agent:
         return [_finding(
             "error",
-            f"{profile_name} 的配置里还有 agent.toolsets——Hermes 不读这个键，工具集限制等于没写。",
-            "升级到 v0.2.1+ 并重新 ./install.sh --force（新模板写 platform_toolsets）。",
+            f"{profile_name} still has agent.toolsets in its config - Hermes does not read that key, so the toolset restriction is not in effect.",
+            "Reinstall with the current version (the template writes platform_toolsets).",
         )]
     cli = ((cfg.get("platform_toolsets") or {}).get("cli")) or []
     if "kanban" not in cli:
         return [_finding(
             "error",
-            f"{profile_name} 的 cli 工具集里没有 kanban——它建不了卡。",
-            f"hermes -p {profile_name} tools enable kanban，然后开一个新会话。",
+            f"{profile_name}'s cli toolset has no kanban - it cannot create cards.",
+            f"hermes -p {profile_name} tools enable kanban, then start a new session.",
         )]
     extra = [t for t in cli if t in EXECUTION_TOOLSETS]
     if extra:
         return [_finding(
             "warn",
-            f"{profile_name} 还带着执行工具（{', '.join(extra)}）——它可能绕过看板自己干活。",
-            "用最新版重新安装，渲染出的 Router 只有 kanban + memory + skills。",
+            f"{profile_name} carries execution tools ({', '.join(extra)}) - it may bypass the board and do the work itself.",
+            "Reinstall with the current version; the rendered Router has kanban + memory + skills only.",
         )]
-    return [_finding("ok", f"{profile_name} 工具集正确：只有 kanban + memory/skills，没有执行工具。")]
+    return [_finding("ok", f"{profile_name} toolsets are correct: kanban + memory/skills only, no execution tools.")]
 
 
 def check_worker_profile(profile_name, profile_cfg):
@@ -98,10 +98,10 @@ def check_worker_profile(profile_name, profile_cfg):
     if not cli:
         return [_finding(
             "warn",
-            f"{profile_name} 没有 platform_toolsets.cli——被分发器拉起时 kanban 工具会自动补上，但直接开会话时它没有工作工具。",
-            "重新运行 ./install.sh --force 重新渲染。",
+            f"{profile_name} has no platform_toolsets.cli - the dispatcher force-adds kanban for spawned workers, but a directly opened session has no work tools.",
+            "Re-run the installer to re-render.",
         )]
-    return [_finding("ok", f"{profile_name} 工具集已渲染（{', '.join(cli)}）。")]
+    return [_finding("ok", f"{profile_name} toolsets rendered ({', '.join(cli)}).")]
 
 
 def is_fake_ip(ip):
@@ -120,12 +120,12 @@ def check_fake_ip(resolved_ips, profiles_allow_private):
     if lacking:
         return [_finding(
             "error",
-            f"这台机器的 DNS 是 fake-IP 模式（公网域名解析到 {fake[0]} 这类 198.18 段地址），"
-            f"Hermes 的 SSRF 守卫会把所有网页抓取当成内网访问拦掉。以下 profile 还没放行：{', '.join(lacking)}。",
-            "在 superagent.yaml 里设 security.allow_private_urls: true 后重新安装（会写进每个 profile；只在默认 profile 上设不算数，profile 之间不继承）。",
+            f"This machine's DNS is in fake-IP mode (public names resolve to 198.18-range addresses like {fake[0]}); "
+            f"Hermes' SSRF guard treats all web fetches as internal and blocks them. These profiles have not opted out: {', '.join(lacking)}.",
+            "Set security.allow_private_urls: true in superagent.yaml and reinstall (it is written into every profile; setting it on the default profile alone does not count - profiles do not inherit it).",
         )]
     return [_finding(
-        "ok", "检测到 fake-IP DNS，各 profile 均已放行私网 URL，网页抓取不会被 SSRF 守卫误拦。")]
+        "ok", "Fake-IP DNS detected, and every profile allows private URLs - web fetches will not be blocked by the SSRF guard.")]
 
 
 def check_private_base_url(providers):
@@ -140,7 +140,7 @@ def check_private_base_url(providers):
         if not ip.is_global:
             out.append(_finding(
                 "warn",
-                f"provider {name} 的端点在非公网地址（{host}）——模型调用不走 SSRF 守卫，这是允许的；只需确保这台机器能直连它（比如在同一个 tailnet 里）。",
+                f"provider {name}'s endpoint is on a non-public address ({host}) - model calls do not pass the SSRF guard, so this is allowed; just make sure this machine can reach it directly (e.g. it is on the same tailnet).",
             ))
     return out
 
@@ -151,8 +151,8 @@ def check_smart_quotes(profile_texts):
         if text and ("“" in text or "”" in text):
             out.append(_finding(
                 "error",
-                f"{profile} 的 config.yaml 里有中文引号——多半是被富文本编辑器改过，所有带引号的值都会读错。",
-                "不要手改渲染文件；改 superagent.yaml（用 nano/VS Code）后重新 ./install.sh --force。",
+                f"{profile}'s config.yaml contains curly (full-width) quotes - likely edited in a rich-text editor; every quoted value will be read wrong.",
+                "Never hand-edit rendered files; edit superagent.yaml (with nano / VS Code) and re-run the installer.",
             ))
     return out
 
@@ -166,29 +166,29 @@ def check_plugin_enablement(enabled, disabled, plugin_present=True):
     if not plugin_present:
         return [_finding(
             "error",
-            "插件目录不在 ~/.hermes/plugins/superagent——套件没装完整。",
-            "在仓库目录重新运行 ./install.sh --force。",
+            "The plugin directory is missing (~/.hermes/plugins/superagent) - the suite is not fully installed.",
+            "Re-run the installer (bootstrap.sh, or ./install.sh in a checkout).",
         )]
     disabled = disabled or []
     if "superagent" in disabled:
         return [_finding(
             "error",
-            "superagent 在 plugins.disabled 里——禁用名单优先于启用名单，插件不会加载。",
-            "跑 hermes plugins enable superagent（它会把两边名单理顺），然后重启 gateway。",
+            "superagent is listed in plugins.disabled - the disable list wins over the enable list, so the plugin will not load.",
+            "Run hermes plugins enable superagent (it reconciles both lists), then restart the gateway.",
         )]
     if enabled is not None and "superagent" not in enabled:
         return [_finding(
             "error",
-            "superagent 不在 plugins.enabled 名单里——Hermes 的插件是 opt-in 的，目录在也不会加载（这正是首次真机安装时 status 命令不存在的原因）。",
-            "跑 hermes plugins enable superagent，然后重启 gateway。",
+            "superagent is not in plugins.enabled - Hermes plugins are opt-in: the directory alone does not load (this is exactly why the status command did not exist on the first live install).",
+            "Run hermes plugins enable superagent, then restart the gateway.",
         )]
     if enabled is None:
         return [_finding(
             "warn",
-            "配置里还没有 plugins.enabled 名单——全新安装的插件可能没被收录。",
-            "跑一次 hermes plugins enable superagent 最稳妥，然后重启 gateway。",
+            "The config has no plugins.enabled list yet - a freshly installed plugin may not be registered.",
+            "Run hermes plugins enable superagent once to be sure, then restart the gateway.",
         )]
-    return [_finding("ok", "插件已在 plugins.enabled 名单里，会被加载。")]
+    return [_finding("ok", "The plugin is listed in plugins.enabled and will load.")]
 
 
 def check_install_drift(manifest_version, running_version, config_mtime, installed_epoch):
@@ -199,14 +199,14 @@ def check_install_drift(manifest_version, running_version, config_mtime, install
     if manifest_version and running_version and manifest_version != running_version:
         out.append(_finding(
             "warn",
-            f"插件版本（{running_version}）与上次安装记录（{manifest_version}）对不上——可能升级装了一半。",
-            "在仓库目录重新运行 ./install.sh --force，让所有部件回到同一版本。",
+            f"Plugin version ({running_version}) and the install record ({manifest_version}) disagree - an upgrade may have stopped halfway.",
+            "Re-run the installer so every part is on one version.",
         ))
     if config_mtime and installed_epoch and config_mtime > installed_epoch + 1:
         out.append(_finding(
             "warn",
-            "superagent.yaml 在上次安装之后又被改过——改动还没渲染进各 profile，现在跑的仍是旧配置。",
-            "重新运行 ./install.sh --force 让改动生效。",
+            "superagent.yaml was edited after the last install - the changes are not rendered into the profiles yet; the old config is still in effect.",
+            "Re-run the installer to apply the changes.",
         ))
     return out
 
@@ -215,18 +215,18 @@ def check_board(counts):
     if counts is None:
         return [_finding(
             "warn",
-            "看板还没初始化（没有 kanban.db）——第一张卡建出来时会自动生成，也可以先跑 hermes kanban init。",
+            "The board is not initialized yet (no kanban.db) - it is created with the first card, or run hermes kanban init.",
         )]
     total = sum(counts.values())
-    return [_finding("ok", f"看板存在，共 {total} 张卡：" +
-                     "，".join(f"{k} {v}" for k, v in sorted(counts.items())))]
+    return [_finding("ok", f"The board exists: {total} card(s): " +
+                     ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))]
 
 
 def summarize(findings):
     errors = sum(1 for f in findings if f["level"] == "error")
     warns = sum(1 for f in findings if f["level"] == "warn")
     if errors:
-        return f"结论：{errors} 个问题需要处理（另有 {warns} 个提醒）。"
+        return f"Bottom line: {errors} problem(s) to fix (plus {warns} note(s))."
     if warns:
-        return f"结论：没有硬伤，{warns} 个提醒值得看一眼。"
-    return "结论：全部正常。"
+        return f"Bottom line: no hard problems; {warns} note(s) worth a look."
+    return "Bottom line: all clear."

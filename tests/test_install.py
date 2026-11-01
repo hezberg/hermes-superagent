@@ -131,7 +131,7 @@ class TestConverge(InstallerCase):
         self.install_filled()
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("本次变更：无", result.stdout)
+        self.assertIn("Changed: nothing", result.stdout)
 
     def test_config_change_rerenders_profiles(self):
         self.install_filled()

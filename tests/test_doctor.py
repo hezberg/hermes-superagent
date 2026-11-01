@@ -98,8 +98,8 @@ class TestMisc(unittest.TestCase):
 
     def test_summarize_counts(self):
         findings = [{"level": "error", "text": "x"}, {"level": "warn", "text": "y"}]
-        self.assertIn("1 个问题", doc.summarize(findings))
-        self.assertIn("全部正常", doc.summarize([{"level": "ok", "text": "z"}]))
+        self.assertIn("1 problem(s)", doc.summarize(findings))
+        self.assertIn("all clear", doc.summarize([{"level": "ok", "text": "z"}]))
 
 
 class TestPluginEnablement(unittest.TestCase):

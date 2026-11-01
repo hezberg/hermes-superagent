@@ -136,8 +136,8 @@ class TestTickOutput(unittest.TestCase):
         ]
         out = rm.format_tick_output(due)
         self.assertIn("修 bug", out)
-        self.assertIn("卡住了", out)
-        self.assertEqual(out.count("待你验收"), 1)  # batch folded to one line
+        self.assertIn("is blocked", out)
+        self.assertEqual(out.count("awaiting your review"), 1)  # batch folded to one line
         self.assertIn("写简报", out)
 
 

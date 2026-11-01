@@ -40,9 +40,9 @@ def main(argv=None):
         except Exception:
             continue
     if state is None:
-        say(f"没有安装记录（{suite_dir} 下没有 state.json / manifest.json），无从卸载。")
-        say("若是手动残局，可检查这几处：~/.hermes/plugins/superagent、"
-            "~/.hermes/profiles/sa-*、~/.hermes/scripts/superagent-reminder-tick.py。")
+        say(f"No install record (no state.json / manifest.json under {suite_dir}); nothing to uninstall.")
+        say("For a manual leftover, check: ~/.hermes/plugins/superagent, "
+            "~/.hermes/profiles/sa-*, ~/.hermes/scripts/superagent-reminder-tick.py.")
         return 1
 
     targets = []
@@ -69,16 +69,16 @@ def main(argv=None):
     if args.purge:
         if os.path.isdir(suite_dir) and not args.dry_run:
             shutil.rmtree(suite_dir)
-        say("已彻底清除，包括你的配置与全部历史记录。")
+        say("Purged: your config and all history are gone too.")
     else:
         kept = [n for n in ("superagent.yaml", "journal.md", "journal.jsonl",
                             "reminders.json", "outbox.json", "backups")
                 if os.path.exists(os.path.join(suite_dir, n))]
         if kept:
-            say(f"保留了你的数据（{', '.join(kept)}）在 {suite_dir} —— "
-                "重装会自动接回；要彻底删除用 uninstall --purge。")
-    say(f"卸载完成，共移除 {len(removed)} 项。Hermes 本身未做任何改动。")
-    say("提醒：若注册过提醒 cron，请在 hermes cron list 里删掉 superagent-reminder-tick 那条。")
+            say(f"Kept your data ({', '.join(kept)}) in {suite_dir} - "
+                "a reinstall picks it back up; use uninstall --purge to delete it.")
+    say(f"Uninstall complete: removed {len(removed)} item(s). Hermes itself was not modified.")
+    say("Note: if a reminder cron job was registered, delete the superagent-reminder-tick entry in hermes cron list.")
     return 0
 
 

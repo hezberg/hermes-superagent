@@ -149,9 +149,9 @@ def filter_due(cands, ledger_state, settings, now):
 
 
 _KIND_PROSE = {
-    "blocked": "卡住了，在等你回话",
-    "ready": "已完成，等你验收",
-    "stalled": "在跑，但已经好一会儿没动静了",
+    "blocked": "is blocked, waiting on you",
+    "ready": "is done, waiting for your review",
+    "stalled": "is running but has gone quiet",
 }
 
 
@@ -160,9 +160,9 @@ def render_reminder_lines(due):
     lines = []
     for cand in due or []:
         who = cand.get("assignee") or "worker"
-        suffix = "（已提醒过 {} 次）".format(cand["count"]) if cand.get("count") else ""
+        suffix = " (reminded {}x before)".format(cand["count"]) if cand.get("count") else ""
         lines.append(
-            "⏰ 「{}」{}（{}）{}".format(
+            "⏰ '{}' {} ({}){}".format(
                 cand["title"], _KIND_PROSE.get(cand["kind"], cand["kind"]),
                 who, suffix,
             )
@@ -180,10 +180,10 @@ def format_tick_output(due):
     batch = [c for c in due if c.get("urgency") != "now"]
     lines = render_reminder_lines(now_items)
     if batch:
-        titles = "、".join("「{}」".format(c["title"]) for c in batch[:3])
-        more = " 等 {} 件".format(len(batch)) if len(batch) > 3 else ""
+        titles = ", ".join("'{}'".format(c["title"]) for c in batch[:3])
+        more = " and {} more".format(len(batch)) if len(batch) > 3 else ""
         lines.append(
-            "📋 另有已完成、待你验收的任务：{}{}——细节在看板和 journal 里。".format(
+            "📋 Also finished and awaiting your review: {}{} - details on the board and in the journal.".format(
                 titles, more
             )
         )
