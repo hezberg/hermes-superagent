@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.5.0 — 2026-11-01
+
+The install/update system, rebuilt instead of patched (operator's
+call after a morning of upgrade friction: a `git pull` blocked by
+the user's own config, three places a config could live, a bash
+installer that had accreted a step per incident).
+
+- **One command, declarative.** `scripts/install.py` replaces the
+  bash installer (`install.sh` is now a shim). Fresh install,
+  upgrade, and repair are the same idempotent convergence: desired
+  state is computed, only differences are applied, and a second run
+  reports "no changes". `--force` and the collision dance are gone.
+- **Config has exactly one home.** The repo ships templates only.
+  First run writes the guided config template to
+  `~/.hermes/superagent/superagent.yaml` and stops (exit 3); fill it
+  in, run the same command again. `pick_config.py` and the staging
+  rules are deleted — there is nothing left to pick between.
+- **Version is single-sourced** in `VERSION`; `scripts/release.sh`
+  syncs the recorded copies and runs the tests; the installer stamps
+  the version into the installed plugin.
+- **State contract + rollback.** Installs record `state.json`
+  (paths + content hashes). The previous generation is snapshotted
+  to `superagent/prev/` before any change — code artifacts only,
+  never the user's config or journal — and
+  `./install.sh --rollback` restores it. Legacy `manifest.json`
+  installs migrate automatically; a manifest is still written for
+  older tooling.
+- **Verification is part of install.** The run ends by executing the
+  doctor checks in-process; hard errors fail the install instead of
+  printing "Done", and operator-side items (the key line, plugin
+  enablement settling) are reported as next steps, not failures.
+- **Uninstall is state-driven too** (`scripts/uninstall.py`), and
+  keeps the operator's config and history by default — `--purge`
+  removes them.
+
+117 tests passing, including the full installer cycle: two-phase
+first run, seeding, idempotent re-run, config-change re-render,
+legacy migration, rollback, and uninstall keeping user data.
+
 ## 0.4.1 — 2026-11-01
 
 - **The `git pull` config conflict is structurally dead.** Field

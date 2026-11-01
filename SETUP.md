@@ -79,17 +79,18 @@ operator step (entering keys). Ask for one confirmation.
 
 ## 4. Execute
 
-1. Write the answers into `config/superagent.local.yaml` (copied
-   from the template or the closest file in `config/examples/`).
-   Never write user values into the tracked template
-   `config/superagent.yaml` — a locally edited tracked file blocks
-   every future `git pull` (field incident, 2026-11-01). The
-   `.local.yaml` name is gitignored, so the file is invisible to git.
-   Validate:
-   `python3 scripts/validate_config.py config/superagent.local.yaml`
+1. **Generate the config (install phase one).** Run `./install.sh`
+   once. With no config anywhere it writes the guided template to
+   `~/.hermes/superagent/superagent.yaml` and stops — that file is
+   the only place user values ever live; the repo tree stays clean,
+   so `git pull` can never conflict over it.
+2. Write the answers into that file. Validate:
+   `python3 scripts/validate_config.py ~/.hermes/superagent/superagent.yaml`
    — fix every ERROR before continuing; warnings about empty fields
-   mean an answer is still missing.
-2. **Operator step — the only one that must happen outside the
+   mean an answer is still missing. (A filled staging file may still
+   be passed once via `--config` to seed the suite config; after
+   that it is ignored, by design.)
+3. **Operator step — the only one that must happen outside the
    agent.** Send one message with the exact line(s) for the operator
    to add to `~/.hermes/.env` in their own editor or terminal, one
    per provider:
@@ -100,24 +101,22 @@ operator step (entering keys). Ask for one confirmation.
    need a restart to pick it up — if you are running inside a
    gateway chat, warn the operator the conversation will drop and
    resume, and make the restart your last step.
-3. Install: `./install.sh --config config/superagent.local.yaml`. A refusal
-   names the collision or validation problem; fix that, not around it.
-   After this first install, the effective config's home is
-   `~/.hermes/superagent/superagent.yaml`: the installer prefers that
-   filled-in copy over any repo-side file on later runs, so upgrades
-   cannot clobber it and `git pull` can never conflict over it. Point
-   the operator at that file for future edits.
-4. Verify: start the profile gateways per docs/CONFIG.md, then check
+4. Install: `./install.sh` (same command as phase one — install,
+   upgrade, and repair are one idempotent convergence). It snapshots
+   the previous generation first (rollback: `./install.sh --rollback`),
+   and refuses nothing silently: a refusal names the validation
+   problem; fix that, not around it.
+5. Verify: start the profile gateways per docs/CONFIG.md, then check
    `hermes superagent status` — config loaded, profiles listed, board
    present — and run `hermes superagent doctor`: it checks the whole
    install (keys, toolsets, fake-IP DNS, rendered configs) and reports
    in prose with fixes. Clear every ✗ before handing over.
-5. Reminder delivery: if the operator picked a platform in question
+6. Reminder delivery: if the operator picked a platform in question
    6, point the tick's cron job at it — `hermes cron list` to find
    the job, then `hermes cron edit <id> --deliver <platform>`. If
    they said "later", leave it and note the same command in the
    hand-over.
-6. Smoke test: give the Router one small real task and watch its card
+7. Smoke test: give the Router one small real task and watch its card
    complete on the board before handing over. A setup that never ran
    a task is not a finished setup.
 
