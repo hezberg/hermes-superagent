@@ -26,7 +26,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_VERSION = "0.13.0"
+PLUGIN_VERSION = "0.13.1"
 
 
 # --------------------------------------------------------------------------

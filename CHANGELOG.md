@@ -1,3 +1,19 @@
+## 0.13.1 — 2026-11-02
+
+- **Wizard step 4 is state-aware.** It used to present the
+  from-zero menu (with "No chat entry" as the default) even when
+  the router profile already had a Feishu app bound — re-running
+  setup and pressing Enter silently dropped the entry record
+  while the app stayed bound. Now the step first reads the
+  router's .env: an existing binding is announced and the menu
+  becomes Keep (the default) / Replace by paste / Replace by
+  binding / Remove (credentials are deleted at the commit point;
+  leaving them would keep the binding alive at the gateway).
+  An existing binding that duplicates another profile gets the
+  same hard-stop resolution as a fresh duplicate. In the bind
+  flow, a setup that leaves the previous app in place now reads
+  as "Kept the existing binding" instead of a fresh bind.
+
 ## 0.13.0 — 2026-11-01
 
 - **`hermes superagent status` is a board now, not a one-liner.**

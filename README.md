@@ -7,7 +7,7 @@ a dispatch-only **Router**, Kanban-backed **Workers**, event **Fast Path**,
 and an external **Watchdog** — so one human can supervise many concurrent
 tasks instead of babysitting one session at a time.
 
-> **Status: v0.13.0.** The dispatch chain is verified end-to-end on a
+> **Status: v0.13.1.** The dispatch chain is verified end-to-end on a
 > live Hermes install (restricted Router → board → dispatcher →
 > Worker → native completion). The suite is built from Hermes'
 > own mechanisms wherever they exist, keeps no provider system of

@@ -442,3 +442,70 @@ class TestUninstallCommand(unittest.TestCase):
             sp.run, builtins.input = orig_run, orig_input
         self.assertEqual(rc, 1)
         self.assertEqual(self.calls, [])
+
+
+class TestStep4ExistingBinding(WizardCase):
+    """Re-running setup over a router that ALREADY has a Feishu app
+    bound: step 4 must be about that state — keep is the default,
+    and one Enter must never silently unwire a live entry."""
+
+    def setUp(self):
+        super().setUp()
+        router_env = os.path.join(self.home, "profiles", "sa-router", ".env")
+        os.makedirs(os.path.dirname(router_env), exist_ok=True)
+        with open(router_env, "w") as fh:
+            fh.write("FEISHU_APP_ID=cli_existing_app\nFEISHU_APP_SECRET=old\n")
+
+    def router_env_text(self):
+        with open(os.path.join(self.home, "profiles", "sa-router",
+                               ".env")) as fh:
+            return fh.read()
+
+    def entry_platform(self):
+        cfg = sa._yaml_load(open(os.path.join(
+            self.home, "superagent", "superagent.yaml")).read())
+        return (cfg.get("entry") or {}).get("platform")
+
+    def test_keep_is_the_default(self):
+        # step 4 answered with Enter ("") = keep; then restart ("")
+        rc, ui = self.run_wizard(["1", "1", "1", "", ""])
+        self.assertEqual(rc, 0, "\n".join(ui.output))
+        self.assertTrue(any("already has a Feishu app bound" in line
+                            for line in ui.output))
+        self.assertEqual(self.entry_platform(), "feishu")
+        self.assertIn("cli_existing_app", self.router_env_text())
+
+    def test_remove_deletes_the_binding(self):
+        # step 4: choice 4 = remove the chat entry
+        rc, ui = self.run_wizard(["1", "1", "1", "4"])
+        self.assertEqual(rc, 0, "\n".join(ui.output))
+        self.assertNotIn("FEISHU_APP_ID", self.router_env_text())
+        self.assertNotEqual(self.entry_platform(), "feishu")
+
+    def test_replace_via_paste(self):
+        rc, ui = self.run_wizard(["1", "1", "1", "2", "cli_brand_new", ""],
+                                 secret="newsecret")
+        self.assertEqual(rc, 0, "\n".join(ui.output))
+        self.assertIn("cli_brand_new", self.router_env_text())
+        self.assertNotIn("cli_existing_app", self.router_env_text())
+        self.assertEqual(self.entry_platform(), "feishu")
+
+
+class TestStep4ExistingDuplicate(WizardCase):
+    def setUp(self):
+        super().setUp()
+        router_env = os.path.join(self.home, "profiles", "sa-router", ".env")
+        os.makedirs(os.path.dirname(router_env), exist_ok=True)
+        with open(router_env, "w") as fh:
+            fh.write("FEISHU_APP_ID=cli_shared_app\nFEISHU_APP_SECRET=x\n")
+        with open(os.path.join(self.home, ".env"), "a") as fh:
+            fh.write("FEISHU_APP_ID=cli_shared_app\n")
+
+    def test_duplicate_resolution_removes_router_copy(self):
+        # resolution menu: 3 = remove router copy, no entry
+        rc, ui = self.run_wizard(["1", "1", "1", "3"])
+        self.assertEqual(rc, 1, "\n".join(ui.output))
+        with open(os.path.join(self.home, "profiles", "sa-router",
+                               ".env")) as fh:
+            self.assertNotIn("FEISHU_APP_ID", fh.read())
+        self.assertTrue(any("ALSO" in line for line in ui.output))

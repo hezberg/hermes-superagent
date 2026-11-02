@@ -632,100 +632,191 @@ def _run_wizard(home, repo, ui, run, environ, state, fetcher):
     pending_feishu = None  # staged credentials, written only at commit
     delivery = ""
     ui.header(4, "Chat entry")
-    feishu_choice = ui.choose("Talk to the Router from chat?", [
-        "No chat entry (CLI only)",
-        "Feishu — paste a NEW dedicated app's App ID + Secret",
-        "Feishu — bind through Hermes' own setup (it offers QR binding)",
-    ], default=0)
-    if feishu_choice in (1, 2):
-        entry_platform = "feishu"
-        delivery = "feishu"
-        router_env = state["router_env"]
-        if feishu_choice == 1:
-            pending_feishu, entry_failed = _paste_feishu(
-                ui, home, router_profile)
-            if pending_feishu is None:
-                entry_platform = ""
-                delivery = ""
-        else:
-            # Bind through Hermes' own setup, then apply the SAME
-            # hard rule as the paste path: a duplicate app is a
-            # stop, not a warning. The conflicting credentials must
-            # not stay on disk either — the gateway would bring the
-            # duplicate binding up regardless of what the wizard
-            # decided.
-            while True:
-                say("Launching Hermes' own setup for the router profile —")
-                say("follow its prompts (QR binding is offered there).")
-                run([hermes, "--profile", router_profile, "gateway", "setup"],
-                    env=env, interactive=True)
-                bound_id = _env_value(_read(router_env), "FEISHU_APP_ID")
-                if not bound_id:
-                    # The operator picked Feishu binding but the
-                    # inner setup produced NO Feishu parameters
-                    # (another platform chosen, or the step was
-                    # skipped). That is a failed step, not a
-                    # shrug: error out and send them back into
-                    # step 4 to do it again, switch methods, or
-                    # explicitly give the entry up.
-                    ui.error("Hermes setup finished, but NO Feishu app was")
-                    say("bound to the router profile — inside that setup you")
-                    say("must pick Feishu and complete its binding; choosing")
-                    say("another platform, or skipping, leaves nothing to wire.")
-                    nxt = ui.choose("Step 4 again — how do you proceed?", [
-                        "Run Hermes setup again — and bind Feishu this time",
-                        "Paste a NEW dedicated app's App ID + Secret instead",
-                        "Give up the chat entry and continue without it",
-                    ], default=0)
-                    if nxt == 0:
-                        continue
-                    if nxt == 1:
-                        pending_feishu, entry_failed = _paste_feishu(
-                            ui, home, router_profile)
-                        if pending_feishu is None:
-                            entry_platform = ""
-                            delivery = ""
-                        break
+
+    router_env = state["router_env"]
+    pending_removal = False  # staged: strip router Feishu creds at commit
+    preset_choice = 0        # set when an earlier branch decided the route
+    step4_done = False
+    # An EXISTING binding changes the whole step: the menu must be
+    # about the state on disk, not a from-zero fiction. (Re-running
+    # setup used to offer "No chat entry" as the DEFAULT over a
+    # live binding — one Enter and the entry record was gone while
+    # the app stayed bound.)
+    existing_id = _env_value(_read(router_env), "FEISHU_APP_ID")
+    preexisting_id = existing_id or ""
+    if existing_id:
+        existing_conflicts = find_app_id_conflicts(
+            home, existing_id, exclude_profile=router_profile)
+        if existing_conflicts:
+            step4_done = True
+            ui.error(f"STOP: {router_profile}'s bound app ({existing_id}) is ALSO")
+            say(f"used by {', '.join(existing_conflicts)}. One Feishu app serves")
+            say("exactly one profile — this duplicate cannot stand as-is.")
+            fix = ui.choose("How do you want to resolve it?", [
+                "Remove the router's copy and bind a NEW app (Hermes setup)",
+                "Remove the router's copy and paste a NEW app instead",
+                "Remove the router's copy and continue WITHOUT a chat entry",
+                "Leave the duplicate in place (entry reported NOT configured)",
+            ], default=0)
+            # Disk edits below are covered by the transactional
+            # snapshot: an interrupt restores the .env byte-for-byte.
+            if fix == 0:
+                remove_env_keys(router_env,
+                                ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
+                step4_done = False
+                preset_choice = 2
+            elif fix == 1:
+                remove_env_keys(router_env,
+                                ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
+                entry_platform = "feishu"
+                delivery = "feishu"
+                pending_feishu, entry_failed = _paste_feishu(
+                    ui, home, router_profile)
+                if pending_feishu is None:
                     entry_platform = ""
                     delivery = ""
-                    entry_failed = "no Feishu app was bound in Hermes setup"
+                    if not entry_failed:
+                        entry_failed = "duplicate removed, no replacement bound"
+            elif fix == 2:
+                remove_env_keys(router_env,
+                                ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
+                entry_failed = f"removed duplicate app {existing_id}; no entry bound"
+            else:
+                entry_failed = f"app {existing_id} duplicates another profile"
+        else:
+            ui.ok(f"{router_profile} already has a Feishu app bound: {existing_id}")
+            keep_choice = ui.choose("Chat entry for the Router?", [
+                "Keep the existing Feishu binding",
+                "Replace it — paste a NEW app's App ID + Secret",
+                "Replace it — bind through Hermes' own setup",
+                "Remove the chat entry (binding deleted when setup commits)",
+            ], default=0)
+            step4_done = True
+            if keep_choice == 0:
+                entry_platform = "feishu"
+                delivery = "feishu"
+                say("Keeping the existing binding — nothing to change.")
+            elif keep_choice == 1:
+                entry_platform = "feishu"
+                delivery = "feishu"
+                pending_feishu, entry_failed = _paste_feishu(
+                    ui, home, router_profile)
+                if pending_feishu is None:
+                    # Bailed mid-replace: the old binding is still
+                    # on disk, so the entry honestly stays wired.
+                    entry_failed = ""
+                    say("Replace cancelled — the existing binding stays.")
+            elif keep_choice == 2:
+                step4_done = False
+                preset_choice = 2
+            else:
+                pending_removal = True
+                say("Noted — the binding is deleted when the setup commits")
+                say("(leaving the credentials would keep it alive at the")
+                say("gateway even with no entry recorded).")
+    if not step4_done:
+        if preset_choice:
+            feishu_choice = preset_choice
+        else:
+            feishu_choice = ui.choose("Talk to the Router from chat?", [
+                "No chat entry (CLI only)",
+                "Feishu — paste a NEW dedicated app's App ID + Secret",
+                "Feishu — bind through Hermes' own setup (it offers QR binding)",
+            ], default=0)
+        if feishu_choice in (1, 2):
+            entry_platform = "feishu"
+            delivery = "feishu"
+            router_env = state["router_env"]
+            if feishu_choice == 1:
+                pending_feishu, entry_failed = _paste_feishu(
+                    ui, home, router_profile)
+                if pending_feishu is None:
+                    entry_platform = ""
+                    delivery = ""
+            else:
+                # Bind through Hermes' own setup, then apply the SAME
+                # hard rule as the paste path: a duplicate app is a
+                # stop, not a warning. The conflicting credentials must
+                # not stay on disk either — the gateway would bring the
+                # duplicate binding up regardless of what the wizard
+                # decided.
+                while True:
+                    say("Launching Hermes' own setup for the router profile —")
+                    say("follow its prompts (QR binding is offered there).")
+                    run([hermes, "--profile", router_profile, "gateway", "setup"],
+                        env=env, interactive=True)
+                    bound_id = _env_value(_read(router_env), "FEISHU_APP_ID")
+                    if not bound_id:
+                        # The operator picked Feishu binding but the
+                        # inner setup produced NO Feishu parameters
+                        # (another platform chosen, or the step was
+                        # skipped). That is a failed step, not a
+                        # shrug: error out and send them back into
+                        # step 4 to do it again, switch methods, or
+                        # explicitly give the entry up.
+                        ui.error("Hermes setup finished, but NO Feishu app was")
+                        say("bound to the router profile — inside that setup you")
+                        say("must pick Feishu and complete its binding; choosing")
+                        say("another platform, or skipping, leaves nothing to wire.")
+                        nxt = ui.choose("Step 4 again — how do you proceed?", [
+                            "Run Hermes setup again — and bind Feishu this time",
+                            "Paste a NEW dedicated app's App ID + Secret instead",
+                            "Give up the chat entry and continue without it",
+                        ], default=0)
+                        if nxt == 0:
+                            continue
+                        if nxt == 1:
+                            pending_feishu, entry_failed = _paste_feishu(
+                                ui, home, router_profile)
+                            if pending_feishu is None:
+                                entry_platform = ""
+                                delivery = ""
+                            break
+                        entry_platform = ""
+                        delivery = ""
+                        entry_failed = "no Feishu app was bound in Hermes setup"
+                        break
+                    conflicts = find_app_id_conflicts(
+                        home, bound_id, exclude_profile=router_profile)
+                    if not conflicts:
+                        if bound_id == preexisting_id:
+                            ui.ok(f"Kept the existing binding ({bound_id}).")
+                        else:
+                            ui.ok(f"Bound app {bound_id} to {router_profile}.")
+                        break
+                    ui.error(f"STOP: the app you just bound ({bound_id}) is already")
+                    say(f"used by {', '.join(conflicts)}. One Feishu app serves")
+                    say("exactly one profile — two profiles on one app fight")
+                    say("over its event stream, so this binding cannot stand.")
+                    if ui.confirm(
+                            "Remove it from the router profile and bind a NEW app?",
+                            default=True):
+                        remove_env_keys(router_env,
+                                        ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
+                        say("Removed. Create a NEW app in the Feishu developer")
+                        say("console first if you have not, then bind that one.")
+                        continue
+                    if ui.confirm(
+                            "Remove it and continue WITHOUT a Feishu entry?",
+                            default=True):
+                        remove_env_keys(router_env,
+                                        ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
+                        say("Removed from the router profile.")
+                    else:
+                        say("Left in place at your choice — the duplicate WILL")
+                        say("conflict at the gateway until one profile gets its")
+                        say("own app. The wizard will not record this entry.")
+                    entry_platform = ""
+                    delivery = ""
+                    entry_failed = f"bound app {bound_id} duplicates another profile"
                     break
-                conflicts = find_app_id_conflicts(
-                    home, bound_id, exclude_profile=router_profile)
-                if not conflicts:
-                    ui.ok(f"Bound app {bound_id} to {router_profile}.")
-                    break
-                ui.error(f"STOP: the app you just bound ({bound_id}) is already")
-                say(f"used by {', '.join(conflicts)}. One Feishu app serves")
-                say("exactly one profile — two profiles on one app fight")
-                say("over its event stream, so this binding cannot stand.")
-                if ui.confirm(
-                        "Remove it from the router profile and bind a NEW app?",
-                        default=True):
-                    remove_env_keys(router_env,
-                                    ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
-                    say("Removed. Create a NEW app in the Feishu developer")
-                    say("console first if you have not, then bind that one.")
-                    continue
-                if ui.confirm(
-                        "Remove it and continue WITHOUT a Feishu entry?",
-                        default=True):
-                    remove_env_keys(router_env,
-                                    ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
-                    say("Removed from the router profile.")
-                else:
-                    say("Left in place at your choice — the duplicate WILL")
-                    say("conflict at the gateway until one profile gets its")
-                    say("own app. The wizard will not record this entry.")
-                entry_platform = ""
-                delivery = ""
-                entry_failed = f"bound app {bound_id} duplicates another profile"
-                break
 
     # -- 6. Commit + write the config --------------------------------------
     # THE commit point: everything before this line was decided in
     # memory. From here on, changes are the installation itself.
     state["committed"] = True
+    if pending_removal:
+        remove_env_keys(router_env, ["FEISHU_APP_ID", "FEISHU_APP_SECRET"])
     if pending_feishu:
         upsert_env_lines(router_env, pending_feishu)
     ui.header(5, "Install")
@@ -805,6 +896,8 @@ def _run_wizard(home, repo, ui, run, environ, state, fetcher):
         say("Everything else is installed and usable from the CLI; re-run")
         say("`hermes superagent setup` with a dedicated app to finish it.")
         return 1
+    if pending_removal:
+        say("Chat entry: removed, as chosen in step 4.")
     ui.ok("You are set. Talk to the Router:")
     say(f"  hermes --profile {router_profile}")
     if entry_platform:
