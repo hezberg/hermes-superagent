@@ -187,7 +187,7 @@ this suite's own work:
 | `tests/` | Unit tests: `python3 -m unittest discover -s tests` |
 | `hermes superagent setup` / `uninstall` | The guided install wizard / verified-clean self-uninstall (engines: `scripts/install.py`, `scripts/uninstall.py`) |
 | `SETUP.md` | The agent-guided setup runbook (probe → questions → plan → execute → hand over) |
-| `docs/` | Architecture mapping, config reference, assumptions, product principles |
+| `docs/` | Architecture mapping, config reference, assumptions, product principles, roadmap |
 
 ## Design notes
 
